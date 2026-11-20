@@ -1,0 +1,194 @@
+{
+  "stepHandWash": [
+    {
+      "step_code": "B1",
+      "step": "B1: CHA HAI LONG BAN TAY VAO NHAU",
+      "count": 15,
+      "duration_sec": 5.2,
+      "confidence_score": 0.77,
+      "violation": false,
+      "segments": [
+        {
+          "started_at": 8920,
+          "ended_at": 13280
+        },
+        {
+          "started_at": 16800,
+          "ended_at": 17360
+        }
+      ]
+    },
+    {
+      "step_code": "B2",
+      "step": "B2: CHA LONG BAN TAY LEN MU BAN TAY, DAN XEN NGON TAY",
+      "count": 3,
+      "duration_sec": 0.8,
+      "confidence_score": 0.61,
+      "violation": true,
+      "segments": [
+        {
+          "started_at": 17560,
+          "ended_at": 18320
+        }
+      ]
+    },
+    {
+      "step_code": "B3",
+      "step": "B3: CHA HAI LONG BAN TAY, DAN XEN NGON TAY",
+      "count": 10,
+      "duration_sec": 2.2,
+      "confidence_score": 0.56,
+      "violation": false,
+      "segments": [
+        {
+          "started_at": 14640,
+          "ended_at": 16800
+        }
+      ]
+    },
+    {
+      "step_code": "B4",
+      "step": "B4: CHA MU CAC NGON TAY VAO LONG BAN TAY DOI DIEN",
+      "count": 0,
+      "duration_sec": 0.0,
+      "confidence_score": 0.0,
+      "violation": true,
+      "segments": []
+    },
+    {
+      "step_code": "B5",
+      "step": "B5: CHA XOAY NGON CAI",
+      "count": 15,
+      "duration_sec": 6.9,
+      "confidence_score": 0.83,
+      "violation": false,
+      "segments": [
+        {
+          "started_at": 1680,
+          "ended_at": 8600
+        }
+      ]
+    },
+    {
+      "step_code": "B6",
+      "step": "B6: CHA DAU NGON TAY VAO LONG BAN TAY",
+      "count": 1,
+      "duration_sec": 0.3,
+      "confidence_score": 0.37,
+      "violation": true,
+      "segments": []
+    }
+  ],
+  "stepSequence": [
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    1,
+    1,
+    1,
+    1,
+    3,
+    3,
+    1,
+    2
+  ],
+  "violationHandWash": true,
+  "totalDurationSecond": 16.6,
+  "eventStartTime": "2026-11-13T06:38:17Z",
+  "eventEndTime": "2026-11-13T06:38:34Z",
+  "outOfOrderSteps": [],
+  "violations": [
+    {
+      "type": "NOT_PERFORMED",
+      "stepCode": "B4",
+      "segments": []
+    },
+    {
+      "type": "NOT_PERFORMED",
+      "stepCode": "B6",
+      "segments": []
+    },
+    {
+      "type": "UNDER_COUNT",
+      "stepCode": "B2",
+      "count": 3,
+      "minCount": 5,
+      "segments": [
+        {
+          "startSec": 17.56,
+          "endSec": 18.32
+        }
+      ]
+    },
+    {
+      "type": "TOO_SHORT",
+      "totalDurationSecond": 17.0,
+      "minDurationSecond": 30.0,
+      "segments": []
+    }
+  ],
+  "stepTimeline": [
+    {
+      "stepCode": "OTHER",
+      "startSec": 0.0,
+      "endSec": 1.68
+    },
+    {
+      "stepCode": "B5",
+      "startSec": 1.68,
+      "endSec": 8.6
+    },
+    {
+      "stepCode": "B6",
+      "startSec": 8.6,
+      "endSec": 8.92
+    },
+    {
+      "stepCode": "B1",
+      "startSec": 8.92,
+      "endSec": 13.28
+    },
+    {
+      "stepCode": "OTHER",
+      "startSec": 13.28,
+      "endSec": 14.32
+    },
+    {
+      "stepCode": "B1",
+      "startSec": 14.32,
+      "endSec": 14.64
+    },
+    {
+      "stepCode": "B3",
+      "startSec": 14.64,
+      "endSec": 16.8
+    },
+    {
+      "stepCode": "B1",
+      "startSec": 16.8,
+      "endSec": 17.36
+    },
+    {
+      "stepCode": "OTHER",
+      "startSec": 17.36,
+      "endSec": 17.56
+    },
+    {
+      "stepCode": "B2",
+      "startSec": 17.56,
+      "endSec": 18.32
+    },
+    {
+      "stepCode": "OTHER",
+      "startSec": 18.32,
+      "endSec": 21.6
+    }
+  ],
+  "timelineDurationSecond": 21.6,
+  "attemptCount": 1,
+  "chosenAttempt": 1
+}

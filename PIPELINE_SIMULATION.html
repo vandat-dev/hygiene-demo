@@ -1,0 +1,1488 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Realtime Hygiene Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:#f1f1f7; --panel:#ffffff; --panel-2:#f6f6fb; --ink:#252644; --muted:#6c6d87; --line:#e2e2ed;
+  --accent:#5b59b3; --accent-ink:#ffffff; --mint:#2fb3c0; --amber:#d68219;
+  --ok:#2f9e6e; --bad:#cf4a3e; --warn:#d68219;
+  --s0:#b9bacb; --s1:#5b59b3; --s2:#2c9fb0; --s3:#3c9d5d; --s4:#c7922b; --s5:#c8553d; --s6:#9157b8;
+  --cpu:#5b59b3; --gpu:#2fb3c0; --remote:#d68219;
+  --wall:#e9edf1; --wall-line:#d9dfe6; --sink:#cfd6de; --sink-in:#b7c1cc; --skin:#e7b08c; --skin-2:#c98f6b;
+  --shadow:0 1px 2px rgba(37,38,68,.05),0 6px 18px rgba(37,38,68,.05);
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:Inter,"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#12131f; --panel:#1b1c2c; --panel-2:#222336; --ink:#e7e7f3; --muted:#9c9db8; --line:#2f3048;
+    --accent:#8d8bea; --accent-ink:#12131f; --mint:#58cdd8; --amber:#eaa24a;
+    --ok:#4fc28c; --bad:#ef6a5d; --warn:#eaa24a;
+    --s0:#4a4b63; --s1:#8d8bea; --s2:#4fc0cf; --s3:#5cbf7c; --s4:#e0ac46; --s5:#ec7a5f; --s6:#b583dc;
+    --cpu:#8d8bea; --gpu:#58cdd8; --remote:#eaa24a;
+    --wall:#20232f; --wall-line:#2a2e3c; --sink:#3a4150; --sink-in:#2b303c; --skin:#d9a07c; --skin-2:#b07c5c;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#12131f; --panel:#1b1c2c; --panel-2:#222336; --ink:#e7e7f3; --muted:#9c9db8; --line:#2f3048;
+  --accent:#8d8bea; --accent-ink:#12131f; --mint:#58cdd8; --amber:#eaa24a;
+  --ok:#4fc28c; --bad:#ef6a5d; --warn:#eaa24a;
+  --s0:#4a4b63; --s1:#8d8bea; --s2:#4fc0cf; --s3:#5cbf7c; --s4:#e0ac46; --s5:#ec7a5f; --s6:#b583dc;
+  --cpu:#8d8bea; --gpu:#58cdd8; --remote:#eaa24a;
+  --wall:#20232f; --wall-line:#2a2e3c; --sink:#3a4150; --sink-in:#2b303c; --skin:#d9a07c; --skin-2:#b07c5c;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5}
+.wrap{max-width:1320px;margin:0 auto;padding-inline:16px;padding-block:20px 56px}
+h1,h2,h3{margin:0;text-wrap:balance}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+button,select{font:inherit;color:var(--ink)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* intro */
+.intro{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px 24px}
+.intro h1{font-size:26px;font-weight:800;letter-spacing:-.02em}
+.intro p{margin:4px 0 0;color:var(--muted);max-width:68ch}
+.how{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;list-style:none;padding:0}
+.how li{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 12px 5px 6px;font-size:13px;font-weight:600}
+.how b{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:12px}
+.top-actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:7px 13px;font-size:13px;font-weight:600;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:16px;min-width:0}
+.label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.row{display:grid;gap:16px;margin-top:16px}
+.hero{grid-template-columns:minmax(0,1.45fr) minmax(0,1fr)}
+@media (max-width:980px){.hero{grid-template-columns:1fr}}
+
+/* camera */
+.cam-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.cam-head h2{font-size:15px;font-weight:700}
+#cam{width:100%;max-width:100%;height:auto;aspect-ratio:16/9;display:block;border-radius:10px;touch-action:none;cursor:grab;background:#000}
+#cam.dragging{cursor:grabbing}
+.picker{margin-top:12px}
+.picker .bar{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.pick{border:1px solid var(--line);background:var(--panel-2);border-radius:9px;padding:6px 10px;cursor:pointer;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px}
+.pick i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.pick[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--panel));}
+.pick small{font-weight:400;color:var(--muted)}
+.hint{font-size:12.5px;color:var(--muted);margin-top:8px;min-height:20px}
+
+/* kiosk */
+.kwrap{display:flex;flex-direction:column;gap:8px}
+.kiosk{border-radius:12px;overflow:hidden;border:6px solid #2a2b40;background:#fff;color:#252644;position:relative;height:300px;display:flex;flex-direction:column}
+.kiosk .kbar{background:#5b59b3;color:#fff;padding:8px 12px;display:flex;justify-content:space-between;font-size:12px;font-weight:600}
+.kiosk .kbody{padding:14px 16px;flex:1;display:flex;flex-direction:column;gap:10px;overflow:hidden}
+.kiosk .big{font-size:21px;font-weight:800}
+.kiosk .sm{font-size:13px;color:#6c6d87}
+.kiosk .timer{font-family:var(--mono);font-size:30px;font-weight:700;color:#474597;line-height:1}
+.ksteps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.kstep{border:1px solid #e2e2ed;border-radius:8px;padding:5px 7px;font-size:11px;background:#f5f5fa;line-height:1.3}
+.kstep b{display:block;font-size:12px}
+.kstep.act{border-color:#58cdd8;background:#e8f8fa}
+.kstep.done{border-color:#2f9e6e;background:#e9f6ef}
+.kres{border-radius:10px;padding:12px;font-weight:700;font-size:16px}
+.kres.pass{background:#e9f6ef;color:#1f7a52}
+.kres.fail{background:#fff4e4;color:#9a5a0f}
+.kres ul{margin:6px 0 0;padding-left:18px;font-weight:500;font-size:12.5px}
+.kpop{position:absolute;left:12px;right:12px;bottom:12px;background:#252644;color:#fff;border-radius:10px;padding:10px 12px;font-size:12.5px;font-weight:600}
+.spinner{width:28px;height:28px;border-radius:50%;border:3px solid #e2e2ed;border-top-color:#5b59b3;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.kcap{font-size:12px;color:var(--muted)}
+
+/* pipeline flow */
+.flow{display:flex;align-items:stretch;gap:0;margin-top:4px}
+.stage{all:unset;box-sizing:border-box;flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:5px;background:var(--panel-2);border:1.5px solid var(--line);border-radius:14px;padding:11px 12px;cursor:pointer;transition:border-color .25s,background .25s}
+.stage:hover{border-color:var(--accent)}
+.stage:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.stage.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 9%,var(--panel))}
+.stage .top{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.stage .num{font:700 12px var(--mono);color:var(--accent)}
+.stage .ico{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--panel);border:1px solid var(--line)}
+.stage .ico svg{width:18px;height:18px;stroke:var(--accent);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.stage h3{font-size:13.5px;font-weight:750;line-height:1.25}
+.stage .q{font-size:12.5px;color:var(--muted);line-height:1.35}
+.where{align-self:flex-start;font:700 10px var(--mono);letter-spacing:.03em;padding:2px 7px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.where.cpu{color:var(--cpu)}.where.gpu{color:var(--gpu)}.where.remote{color:var(--remote)}
+.stage .out{margin-top:auto;font-family:var(--mono);font-size:11.3px;font-weight:700;padding:5px 7px;border-radius:7px;background:var(--panel);border:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stage .more{font-size:11.5px;font-weight:600;color:var(--accent)}
+.link{flex:0 0 86px;display:flex;flex-direction:column;justify-content:center;align-items:stretch;gap:5px;padding:0 6px;text-align:center}
+.link .lab{font-size:11px;font-weight:650;line-height:1.3;color:var(--ink)}
+.link .line{position:relative;height:3px;border-radius:2px;background:var(--line);margin-right:8px}
+.link .line::after{content:"";position:absolute;right:-9px;top:50%;transform:translateY(-50%);border-left:9px solid var(--line);border-top:6px solid transparent;border-bottom:6px solid transparent}
+.link.on .line{background:var(--accent)}
+.link.on .line::after{border-left-color:var(--accent)}
+.link .dot{position:absolute;top:50%;width:11px;height:11px;margin-top:-5.5px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 25%,transparent);opacity:0}
+.link.on .dot{opacity:1;animation:flow 1s linear infinite}
+@keyframes flow{from{left:0}to{left:calc(100% - 11px)}}
+.link .val{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:16px}
+@media (max-width:1100px){
+  .flow{flex-direction:column}
+  .link{flex:0 0 auto;flex-direction:row;align-items:center;padding:6px 0 6px 18px;text-align:left;gap:12px}
+  .link .line{width:3px;height:40px;margin:0 0 8px 0;flex:none}
+  .link .line::after{right:auto;left:50%;top:auto;bottom:-9px;transform:translateX(-50%);border-left:6px solid transparent;border-right:6px solid transparent;border-top:9px solid var(--line);border-bottom:0}
+  .link.on .line::after{border-top-color:var(--accent);border-left-color:transparent}
+  .link .dot{left:50%!important;margin-left:-5.5px;margin-top:0;top:0}
+  .link.on .dot{animation:flowv 1s linear infinite}
+  @keyframes flowv{from{top:0}to{top:calc(100% - 11px)}}
+}
+@media (prefers-reduced-motion:reduce){.link.on .dot{animation:none;left:calc(50% - 5.5px)}}
+
+/* inside the 3 AI */
+.ais h2{font-size:16px;font-weight:800}
+.airow{display:grid;grid-template-columns:minmax(0,1.15fr) 34px minmax(0,.75fr) 34px minmax(0,1.15fr);align-items:center;gap:10px 8px;padding:16px 0 14px;border-top:1px solid var(--line)}
+.airow:first-of-type{border-top:0;padding-top:8px}
+.aihead{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px}
+.aihead h3{font-size:15px;font-weight:800}
+.aihead .qq{font-size:13.5px;color:var(--muted)}
+.aihead .go{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--accent);background:none;border:0;cursor:pointer;padding:0}
+.pane{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-height:150px;display:flex;flex-direction:column;gap:6px}
+.pane .label{font-size:10.5px}
+.pane .cap{font-size:12px;color:var(--muted);line-height:1.4}
+.arr{display:grid;place-items:center;color:var(--accent)}
+.arr svg{width:28px;height:28px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.mbox{border:1.5px solid var(--accent);border-radius:14px;padding:12px;text-align:center;display:grid;gap:4px;background:color-mix(in srgb,var(--accent) 7%,var(--panel))}
+.mbox.remote{border-color:var(--remote);background:color-mix(in srgb,var(--remote) 8%,var(--panel))}
+.mbox.gpu{border-color:var(--gpu);background:color-mix(in srgb,var(--gpu) 8%,var(--panel))}
+.mbox b{font-size:14px}
+.mbox .m{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.mbox .tm{font-family:var(--mono);font-size:12px;font-weight:700}
+.aifoot{grid-column:1/-1;font-size:13px;background:var(--panel-2);border-radius:10px;padding:8px 12px;display:flex;gap:8px;align-items:baseline}
+.aifoot b{color:var(--accent);white-space:nowrap}
+.big-out{font-size:20px;font-weight:800;line-height:1.2}
+.big-out small{display:block;font-size:12.5px;font-weight:500;color:var(--muted)}
+.film{width:100%;height:92px;display:block}
+.blockstrip{width:100%;height:30px;display:block}
+.bars{display:grid;gap:4px}
+.bar{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:8px;align-items:center;font-size:12px}
+.bar .tr{height:10px;border-radius:5px;background:var(--panel);border:1px solid var(--line);position:relative;overflow:hidden}
+.bar .tr span{position:absolute;inset:0 auto 0 0;border-radius:5px;transition:width .3s}
+.bar .tr em{position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--ink);opacity:.55}
+.bar .v{font-family:var(--mono);font-size:11.5px;text-align:right}
+.bar.top .nm{font-weight:800}
+.conf{height:10px;border-radius:5px;background:var(--panel);border:1px solid var(--line);position:relative;overflow:hidden}
+.conf span{position:absolute;inset:0 auto 0 0;background:var(--ok);transition:width .3s}
+.conf em{position:absolute;top:-1px;bottom:-1px;left:70%;width:2px;background:var(--ink);opacity:.6}
+#gview{width:150px;height:150px;border-radius:8px;border:1px solid var(--line);align-self:center;max-width:100%}
+@media (max-width:900px){
+  .airow{grid-template-columns:1fr}
+  .arr svg{transform:rotate(90deg)}
+}
+/* sliding-window explainer */
+.sw{grid-column:1/-1;border-top:1px solid var(--line);padding:16px 0 14px}
+.sw-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-bottom:8px}
+.sw-head h3{font-size:15px;font-weight:800;margin-right:auto}
+.sw-head select{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12.5px}
+.sw-head label{font-size:12px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:6px}
+#swc{width:100%;height:150px;display:block}
+.sw-cap{font-size:13.5px;margin-top:6px;min-height:42px;max-width:110ch}
+.sw-cap b{color:var(--accent)}
+.sw-cap .err{color:var(--bad);font-weight:700}
+.sw-leg{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--muted);margin-top:4px}
+.sw-leg i{display:inline-block;width:12px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+/* WHO under kiosk */
+.checks{display:grid;gap:6px}
+.check{display:grid;grid-template-columns:24px 1fr auto;gap:8px;align-items:center;padding:6px 10px;border-radius:10px;background:var(--panel-2);font-size:13px}
+.check .ic{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;color:#fff;background:var(--s0)}
+.check.ok .ic{background:var(--ok)}
+.check .val{font-family:var(--mono);font-size:12.5px;font-weight:700}
+.verdict{padding:9px 12px;border-radius:10px;font-weight:750;text-align:center;background:var(--panel-2)}
+.verdict.ok{background:color-mix(in srgb,var(--ok) 15%,var(--panel));color:var(--ok)}
+.verdict.bad{background:color-mix(in srgb,var(--bad) 13%,var(--panel));color:var(--bad)}
+.note{font-size:12px;color:var(--muted);margin-top:10px}
+
+/* advanced */
+details.adv{margin-top:16px}
+details.adv>summary{cursor:pointer;font-weight:700;font-size:14px;list-style:none;display:flex;align-items:center;gap:8px}
+details.adv>summary::before{content:"▸";color:var(--accent);transition:transform .2s}
+details.adv[open]>summary::before{transform:rotate(90deg)}
+.adv-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:12px}
+@media (max-width:1000px){.adv-grid{grid-template-columns:1fr}}
+.opt{display:grid;gap:10px}
+.opt label{display:grid;gap:4px;font-size:12px;font-weight:600;color:var(--muted)}
+.opt select{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px}
+.toggle{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--ink)!important}
+.meter{display:grid;grid-template-columns:118px 1fr 52px;gap:8px;align-items:center;font-size:12.5px;margin-bottom:6px}
+.meter .tr{height:9px;border-radius:5px;background:var(--panel-2);border:1px solid var(--line);overflow:hidden;position:relative}
+.meter .tr span{position:absolute;inset:0 auto 0 0;transition:width .25s}
+.meter .v{font-family:var(--mono);font-size:12px;text-align:right}
+.log{font-family:var(--mono);font-size:11.3px;max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel-2)}
+.log div{padding:4px 8px;border-bottom:1px solid var(--line)}
+.log .t{color:var(--muted);margin-right:6px}
+
+/* drawer */
+.scrim{position:fixed;inset:0;background:rgba(18,19,31,.45);z-index:40}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(760px,100%);background:var(--panel);z-index:41;box-shadow:-10px 0 30px rgba(0,0,0,.2);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.dhead{padding:16px 18px 10px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.dhead h2{font-size:19px;font-weight:800}
+.dtabs{display:flex;gap:6px;flex-wrap:wrap;padding:10px 18px 0}
+.dtab{border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:5px 10px;font-size:12.5px;font-weight:600;cursor:pointer}
+.dtab[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.dbody{padding:14px 18px 24px;overflow:auto}
+.dbody h3{font-size:17px;font-weight:800}
+.dbody .what{margin:6px 0 0;font-size:14px;max-width:68ch}
+.dbody ol{margin:8px 0 0;padding-left:20px;display:grid;gap:6px;max-width:72ch;font-size:13.5px}
+.dbody ol li::marker{font-family:var(--mono);font-weight:700;color:var(--accent)}
+.dsect{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:16px 0 6px}
+.io{display:grid;grid-template-columns:72px 1fr;gap:5px 10px;font-size:13px}
+.io dt{color:var(--muted);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding-top:2px}
+.io dd{margin:0}
+.live{border:1px dashed var(--line);border-radius:8px;padding:8px 10px;background:var(--panel-2)}
+.kvs{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:12.5px}
+.kvs span:nth-child(even){font-family:var(--mono);text-align:right}
+details.code{margin-top:12px}
+details.code summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--accent)}
+pre{margin:8px 0 0;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:12px/1.5 var(--mono);overflow-x:auto;white-space:pre}
+@media (prefers-reduced-motion:reduce){.spinner{animation:none}.bar .tr span,.meter .tr span{transition:none}}
+</style>
+
+<div class="wrap">
+  <section class="intro">
+    <div>
+      <h1>Realtime Hygiene Pipeline</h1>
+      <p>Mô phỏng cách máy edge cạnh bồn rửa chấm điểm rửa tay theo 6 bước WHO, chạy theo đúng logic của <span class="mono">realtime_hygiene_app</span>.</p>
+      <ol class="how">
+        <li><b>1</b>Kéo đôi tay vào bồn rửa</li>
+        <li><b>2</b>Chọn bước đang thực hiện</li>
+        <li><b>3</b>Xem AI trả kết quả và kiosk chấm điểm</li>
+      </ol>
+    </div>
+    <div class="top-actions">
+      <button class="btn primary" id="demo">Tự chạy một lần rửa mẫu</button>
+      <button class="btn" id="reset">Làm lại</button>
+    </div>
+  </section>
+
+  <div class="row hero">
+    <section class="card">
+      <div class="cam-head"><h2>Camera tại bồn rửa</h2><span class="muted mono" style="font-size:12px" id="camcap"></span></div>
+      <canvas id="cam" width="960" height="540" aria-label="Camera mô phỏng. Kéo đôi tay vào khung bồn rửa."></canvas>
+      <div class="picker">
+        <div class="label">Bước đang thực hiện</div>
+        <div class="bar" id="picker" role="group" aria-label="Chọn bước"></div>
+        <div class="hint" id="hint"></div>
+      </div>
+    </section>
+    <section class="card kwrap">
+      <div class="cam-head"><h2>Màn hình kiosk</h2><span class="kcap" id="kcap"></span></div>
+      <div class="kiosk" id="kiosk"></div>
+      <div class="label" style="margin-top:6px">Server chấm theo WHO · cả 3 phải đạt</div>
+      <div class="checks" id="checks"></div>
+      <div class="verdict" id="verdict">Chưa có lần rửa</div>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:16px">
+    <div class="cam-head"><h2>Dữ liệu đi qua 6 khối</h2><span class="kcap">Mũi tên ghi dữ liệu được chuyển tiếp · bấm vào khối để xem chi tiết</span></div>
+    <div class="flow" id="pipe"></div>
+  </section>
+
+  <section class="card ais" style="margin-top:16px">
+    <div class="cam-head"><h2>Bên trong 3 AI: nhìn thấy gì, trả về gì</h2><span class="kcap">Cập nhật trực tiếp theo đôi tay ở camera</span></div>
+
+    <div class="airow">
+      <div class="aihead"><h3>AI #1 · Phát hiện tay</h3><span class="qq">Có bàn tay trong bồn rửa không?</span><button class="go" data-open="gate">Xem chi tiết ›</button></div>
+      <div class="pane"><span class="label">AI nhìn thấy</span><canvas id="gview" width="150" height="150"></canvas>
+        <span class="cap">Cả khung hình thu nhỏ còn 320×320, giữ tỉ lệ, thêm viền xám trên dưới.</span></div>
+      <div class="arr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg></div>
+      <div class="mbox gpu"><b>hand_320</b><span class="m">OpenVINO · iGPU trên máy edge</span><span class="tm" id="m1">~25 ms · 4 lần/giây</span></div>
+      <div class="arr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg></div>
+      <div class="pane"><span class="label">AI trả về</span><div class="big-out" id="o1"></div>
+        <div class="conf"><span id="o1c"></span><em></em></div><span class="cap">Thanh: độ tin cậy. Vạch đen: ngưỡng 0.70. Chỉ tính tay có tâm nằm trong vùng bồn.</span></div>
+      <div class="aifoot"><b>Dùng để:</b><span id="f1"></span></div>
+    </div>
+
+    <div class="airow">
+      <div class="aihead"><h3>AI #2 · Nhận diện bước</h3><span class="qq">Mỗi hình đang ở bước nào trong 6 bước?</span><button class="go" data-open="stage">Xem chi tiết ›</button></div>
+      <div class="pane"><span class="label">AI nhìn thấy</span><canvas class="film" id="film"></canvas>
+        <span class="cap">24 hình liên tiếp (≈ 1 giây), mỗi hình 224×224. Cứ có 12 hình mới thì gửi một lần. Vạch màu dưới mỗi hình là nhãn AI đã trả về; xám là chưa có.</span></div>
+      <div class="arr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg></div>
+      <div class="mbox remote"><b>Stage model</b><span class="m">máy chủ Triton · gRPC</span><span class="tm" id="m2">—</span></div>
+      <div class="arr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg></div>
+      <div class="pane"><span class="label">AI trả về</span><div class="big-out" id="o2"></div><div class="bars" id="probs"></div></div>
+      <div class="aifoot"><b>Dùng để:</b><span>Mỗi hình nhận một nhãn bước, gửi về server. Nhãn đến trễ khoảng 1 giây so với camera vì phải gom đủ 24 hình.</span></div>
+    </div>
+
+    <div class="sw">
+      <div class="sw-head"><h3>Cửa sổ trượt: AI #2 đọc mỗi hình 2 lần, AI #3 đếm mỗi hình 1 lần</h3>
+        <label for="swstride">STRIDE
+          <select id="swstride">
+            <option value="12" selected>12 · chồng 50% (code hiện tại)</option>
+            <option value="24">24 · không chồng</option>
+            <option value="18">18 · chồng 25%</option>
+            <option value="6">6 · chồng 75%</option>
+          </select></label>
+        <button class="btn" id="swplay">Tạm dừng</button>
+        <button class="btn" id="swnext">Bước tiếp</button>
+      </div>
+      <canvas id="swc" aria-label="Hình động cửa sổ trượt 24 hình"></canvas>
+      <div class="sw-cap" id="swcap"></div>
+      <div class="sw-leg"><span><i style="background:color-mix(in srgb,var(--accent) 22%,transparent);border:1.5px solid var(--accent)"></i>cửa sổ đang gửi cho AI #2 (24 hình)</span>
+        <span><i style="background:color-mix(in srgb,var(--accent) 55%,transparent)"></i>phần chồng với lần gửi trước</span>
+        <span>● số lần AI #2 đã đọc hình đó</span><span><i style="background:var(--s1)"></i>nhãn đã chốt</span>
+        <span><i style="background:var(--mint)"></i>block AI #3 đã đếm</span><span><i style="background:var(--bad)"></i>block thiếu clip (lỗi)</span></div>
+    </div>
+
+    <div class="airow">
+      <div class="aihead"><h3>AI #3 · Đếm số lần</h3><span class="qq">Trong 1 giây vừa rồi, mỗi bước chà được mấy lần?</span><button class="go" data-open="count">Xem chi tiết ›</button></div>
+      <div class="pane"><span class="label">AI nhìn thấy</span><canvas class="blockstrip" id="block"></canvas>
+        <span class="cap" id="i3">Block 24 hình (hình 0–23, 24–47, … không chồng nhau) cùng 24 nhãn bước từ AI #2.</span></div>
+      <div class="arr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg></div>
+      <div class="mbox remote"><b>Count model</b><span class="m">máy chủ Triton · gRPC</span><span class="tm" id="m3">—</span></div>
+      <div class="arr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg></div>
+      <div class="pane"><span class="label">AI trả về</span><div class="big-out" id="o3"></div><div class="bars" id="counts"></div></div>
+      <div class="aifoot"><b>Dùng để:</b><span>Feeder cộng dồn số lần qua các block rồi gửi server. Server làm tròn; mỗi bước cần ≥ 5 lần (vạch đen).</span></div>
+    </div>
+  </section>
+
+  <details class="adv card">
+    <summary>Tùy chọn mô phỏng, tài nguyên máy và nhật ký sự kiện</summary>
+    <div class="adv-grid">
+      <div class="opt">
+        <label>Ghi video
+          <select id="recmode">
+            <option value="enc1080">Nén lại 1920×1080 (cấu hình hiện tại)</option>
+            <option value="enc720">Nén lại 1280×720</option>
+            <option value="enc360">Nén lại 640×360</option>
+            <option value="copy">Copy luồng H.264 (đề xuất)</option>
+          </select></label>
+        <label>Máy chủ Triton
+          <select id="triton"><option value="edge">Edge (mạng LAN)</option><option value="cloud">Cloud</option></select></label>
+        <label>Hand gate chạy trên
+          <select id="gatedev"><option value="GPU">iGPU</option><option value="CPU">CPU</option></select></label>
+        <label class="toggle"><input type="checkbox" id="netdown"> Ngắt mạng tới Triton</label>
+        <label class="toggle"><input type="checkbox" id="camdown"> Ngắt camera</label>
+      </div>
+      <div>
+        <div class="label" style="margin-bottom:8px">CPU (% của 1 core, đo trên i5)</div>
+        <div id="meters"></div>
+        <div class="note" id="cputot"></div>
+      </div>
+      <div>
+        <div class="label" style="margin-bottom:8px">POST /events (feeder → server)</div>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </details>
+  <p class="note" style="text-align:center">Hình bàn tay: Microsoft Fluent Emoji, giấy phép MIT.</p>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden role="dialog" aria-modal="true" aria-labelledby="dtitle">
+  <div class="dhead"><div><div class="label" id="dkicker"></div><h2 id="dtitle"></h2></div><button class="btn" id="dclose">Đóng</button></div>
+  <div class="dtabs" id="dtabs" role="tablist"></div>
+  <div class="dbody" id="dbody"></div>
+</aside>
+
+<script>
+(() => {
+"use strict";
+const FPS = 25, DT = 1 / FPS;
+const C = { MOTION_TIMEOUT: 3, STREAM_GRACE: 5, GATE_HZ: 4, GATE_EVERY: 2, RESULT_S: 12, NOTICE_S: 8,
+  LAG_WARN: 2, LAG_CLEAR: 0.5, CLEAR_HOLD: 3, DRAIN_S: 60, BUFFER_S: 60, CLIP: 24, STRIDE: 12,
+  BLIP_FRAMES: 12.5, MIN_COUNT: 5, TOTAL_MIN: 30, MIN_ACTIVE: 2, GOP: 50, ZONE: [0.27, 0.32, 0.75, 0.98] };
+const STEP_NAMES = { 1: "Chà hai lòng bàn tay", 2: "Chà mu bàn tay & kẽ ngón", 3: "Chà kẽ trong ngón tay",
+  4: "Chà mặt ngoài ngón tay", 5: "Chà ngón tay cái", 6: "Chà đầu ngón tay" };
+const EN_NAMES = { 1: "Palm to palm", 2: "Back of hands", 3: "Interlaced fingers", 4: "Backs of fingers", 5: "Thumbs", 6: "Fingertips" };
+const REC = {
+  enc1080: { label: "nén lại 1920×1080", cpu: 94, mbps: 5.4, render: 0.19, copy: false },
+  enc720: { label: "nén lại 1280×720", cpu: 40, mbps: 2.6, render: 0.09, copy: false },
+  enc360: { label: "nén lại 640×360", cpu: 14, mbps: 0.9, render: 0.03, copy: false },
+  copy: { label: "copy H.264 gốc", cpu: 1, mbps: 4.5, render: 0.19, copy: true },
+};
+let colorCache = {};
+const css = n => colorCache[n] ?? (colorCache[n] = getComputedStyle(document.documentElement).getPropertyValue(n).trim());
+function esc(s) { return String(s).replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])); }
+
+const STEPS = [
+ { id: 1, grp: "Feeder: lấy hình", t: "Kết nối RTSP", short: "Mở luồng 101 của camera qua TCP", nodes: ["cam"], act: "rtsp",
+   what: "Feeder mở một kết nối RTSP tới camera và giữ nó suốt đời process. Nếu kết nối hỏng, nó tự kết nối lại; nếu đang có người rửa, lần rửa đó vẫn được giữ.",
+   how: ["Trước khi mở luồng, set_capture_options() đặt biến OPENCV_FFMPEG_CAPTURE_OPTIONS = rtsp_transport;tcp|fflags;nobuffer|flags;low_delay. TCP để không mất gói (UDP làm ảnh HEVC bị nhòe), nobuffer/low_delay để FFmpeg trả frame ngay, không gom bộ đệm.",
+     "cv2.VideoCapture(url, cv2.CAP_FFMPEG) mở URL rtsp://…/Streaming/Channels/101. OpenCV gọi FFmpeg bên dưới để bắt tay RTSP (DESCRIBE, SETUP, PLAY) rồi nhận gói RTP chứa H.264.",
+     "Mở thất bại: log lỗi, báo camera_status OFFLINE cho server, ngủ 5 s (RECONNECT_DELAY_S) rồi thử lại.",
+     "Mở được: báo ONLINE. Nếu lúc này đang dở một lần rửa và tay mới vắng chưa quá 8 s (MOTION_TIMEOUT_S 3 + STREAM_GRACE_S 5), lần rửa được giữ, đồng hồ 'vắng tay' được đặt lại.",
+     "CameraStatusReporter gửi trạng thái khi đổi và định kỳ; server chuyển tiếp lên EHP qua Kafka mỗi 60 s."],
+   io: ["URL RTSP trong EDGE_CAMERAS", "luồng gói H.264 1920×1080, 25 fps, ~4–5 Mbps"], hw: ["cpu", "CPU, rất nhẹ"],
+   ref: "camera/feeder.py:75, 805–828",
+   code: String.raw`while not stop.is_set():
+    cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    if not cap.isOpened():
+        log.error("[%s] cannot open RTSP, retrying in %.0fs", name, RECONNECT_DELAY_S)
+        cam_status.set("OFFLINE", "Unable to open RTSP stream; retrying every ...")
+        if washing and time.monotonic() - last_motion > stream_end_s:
+            end_wash()
+        time.sleep(RECONNECT_DELAY_S)
+        continue
+    ...
+    cam_status.set("ONLINE", "Camera stream is active")
+    if washing:  # reconnected mid-wash
+        if time.monotonic() - last_motion > stream_end_s:
+            end_wash()
+        else:  # restart the no-motion clock: frames were lost, not still
+            last_motion = time.monotonic()`,
+   cfg: "EDGE_CAMERAS, RTSP_TRANSPORT=tcp, STREAM_GRACE_S=5",
+   live: () => kv([["Trạng thái", S.stream.up ? "ONLINE" : "RECONNECTING"], ["Frame đã nhận", S.stream.frame], ["Server đang thấy", S.srv.cameraStatus]]) },
+
+ { id: 2, grp: "", t: "Decode từng frame", short: "Giải nén H.264 thành ảnh BGR 1920×1080", nodes: ["dec"], act: "decode",
+   what: "Mỗi lần cap.read(), FFmpeg giải nén một frame H.264 thành ảnh thô để Python dùng được. Việc này chạy cho MỌI frame, kể cả khi không có ai ở bồn rửa, và hoàn toàn bằng CPU.",
+   how: ["FFmpeg tách gói RTP, ghép lại thành NAL unit H.264.",
+     "Bộ giải mã H.264 dựng lại ảnh: I-frame tự đủ thông tin; P-frame chỉ chứa 'khối này giống frame trước, dịch đi bao nhiêu, cộng phần sai khác', nên phải dựng tuần tự từ I-frame gần nhất.",
+     "Ảnh ra ở dạng YUV 4:2:0, OpenCV đổi sang BGR 8 bit: mảng numpy (1080, 1920, 3) uint8, khoảng 6.2 MB mỗi frame.",
+     "Vòng lặp ghi nhận frame (cam_status.tick(), frame_i += 1) rồi chia frame cho ba nhánh: hand gate, scorer, recorder.",
+     "Bản opencv-python-headless cài từ pip được build không có VAAPI, nên không dùng được giải mã phần cứng của iGPU."],
+   io: ["gói H.264 nén", "ndarray BGR (1080,1920,3) uint8, 25 lần/giây"], hw: ["cpu", "CPU ~30% một core, 24/7"],
+   ref: "camera/feeder.py:830–845",
+   code: String.raw`while not stop.is_set():
+    ok, frame = cap.read()          # FFmpeg: demux + decode H.264 -> BGR
+    if not ok:
+        log.warning("[%s] stream dropped — reconnecting", name)
+        cam_status.set("RECONNECTING", "Stream read failed; reconnecting")
+        break
+    cam_status.tick()
+    frame_i += 1
+    stats_frames += 1
+    now_m = time.monotonic()`,
+   cfg: "CAPTURE_STATS_S (log fps và độ trễ luồng)",
+   live: () => kv([["Frame", S.stream.frame], ["Kích thước", "1920×1080×3 = 6.2 MB"], ["CPU decode", (S.cpu.decode || 0) + "% một core"]]) },
+
+ { id: 3, grp: "", t: "Hand gate tìm tay", short: "AI #1 hand_320 trên iGPU, ≤ 4 lần/giây", nodes: ["gate"], act: "gate",
+   what: "Một model nhỏ (hand_320, chạy bằng OpenVINO) trả lời câu hỏi: có bàn tay nào trong vùng bồn rửa không? Đây là công tắc bật/tắt một lần rửa, không chấm điểm WHO.",
+   how: ["Vòng capture chỉ đưa frame cho gate khi frame_i chia hết cho 2 VÀ đã qua 0.25 s từ lần trước (GATE_MAX_HZ = 4).",
+     "LatestFrameGate chạy gate trên một thread riêng và chỉ giữ frame MỚI NHẤT. Frame cũ chưa kịp xử lý bị thay thế, nên gate chậm cũng không làm chậm vòng capture.",
+     "_preprocess(): thu nhỏ giữ tỉ lệ 1920×1080 → 320×180, thêm viền xám (giá trị 114) 70 px trên và dưới thành 320×320, đổi BGR → RGB, chia 255, xếp thành tensor float32 [1,3,320,320].",
+     "OpenVINO chạy model trên iGPU (HAND_DEVICE=GPU; không có /dev/dri thì tự về CPU, ~150 ms mỗi lần). Output [1,300,6]: tối đa 300 box (x1,y1,x2,y2,độ tin cậy,lớp), đã qua NMS.",
+     "Giữ box có độ tin cậy ≥ 0.70, đổi tọa độ ngược về khung 1920×1080, bỏ box có tâm nằm ngoài HAND_ZONE. Còn ít nhất 1 box thì kết quả là 'có tay'.",
+     "Kết quả được đánh số thứ tự (sequence); vòng capture chỉ đọc khi có kết quả mới."],
+   io: ["frame BGR mới nhất", "có tay / không + danh sách box"], hw: ["gpu", "iGPU (~25 ms/lần, ước tính)"],
+   ref: "camera/feeder.py:551, 857–865 · camera/hand_gate.py:109, 141",
+   code: String.raw`# feeder.py — at most every 2nd frame and GATE_MAX_HZ
+if frame_i % cfg.detect_every_n_frames == 0 and now_m >= next_gate:
+    gate.submit(frame, frame_i)          # LatestFrameGate: newest frame only
+    next_gate = now_m + (1.0 / cfg.gate_max_hz if cfg.gate_max_hz > 0 else 0.0)
+
+# hand_gate.py — letterbox to 320x320
+gain = min(self._input_size / w, self._input_size / h)
+rw, rh = round(w * gain), round(h * gain)
+image = cv2.resize(frame, (rw, rh), interpolation=cv2.INTER_LINEAR)
+image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+image = cv2.copyMakeBorder(image, top, dh - top, left, dw - left,
+                           cv2.BORDER_CONSTANT, value=(114, 114, 114))
+image = image.astype(np.float32) / 255.0
+result = self._req.infer({self._input_name: tensor})   # OpenVINO`,
+   cfg: "MOTION_BACKEND=openvino, HAND_DEVICE=GPU, HAND_ZONE, HAND_CONFIDENCE=0.70, GATE_MAX_HZ=4",
+   live: () => kv([["Số lần đã chạy", S.gate.seq], ["Kết quả gần nhất", S.gate.detected ? "có tay trong HAND_ZONE" : "không có tay"], ["Thiết bị", ui.gatedev === "GPU" ? "iGPU" : "CPU"]]) },
+
+ { id: 4, grp: "Feeder: một lần rửa", t: "Bắt đầu lần rửa", short: "Thấy tay: tạo scorer, recorder, gửi wash_started", nodes: ["trig", "evt"], act: "trigger",
+   what: "Khi gate báo có tay mà feeder đang rảnh, một lần rửa (attempt) bắt đầu: feeder tạo bộ chấm điểm, bộ ghi video và báo cho server.",
+   how: ["Mỗi kết quả 'có tay' cập nhật last_motion = bây giờ. Đây là đồng hồ dùng để biết khi nào người rời đi.",
+     "Nếu chưa ở trạng thái rửa: washing = True. Nếu TRIGGER_DEBUG=1, ảnh trigger kèm box và HAND_ZONE được lưu vào sessions/trigger_debug/.",
+     "Hỏi TritonRouter danh sách Triton dùng được (edge/cloud theo EHP), tạo ScorerWorker và cho chạy ngay. Scorer bắt đầu chấm luôn, nhưng event của nó bị giữ lại cho tới khi wash_started đã tới server.",
+     "Đưa việc 'gửi wash_started' vào SerialWorker (thread FIFO), để thứ tự event luôn đúng: wash_stopped của lần trước luôn tới trước wash_started của lần sau.",
+     "Tạo SessionRecorder: mở tiến trình ffmpeg để ghi MP4 (bước 9)."],
+   io: ["kết quả gate", "event wash_started {cam_name, fps: 25}"], hw: ["cpu", "CPU, nhẹ"],
+   ref: "camera/feeder.py:866–898",
+   code: String.raw`if hit:
+    last_motion = now_m
+    if not washing:
+        washing = True
+        log.info("[%s] motion → wash_started", name)
+        urls = ROUTER.candidates() if ROUTER else []
+        if urls:
+            sc = ScorerWorker(name, urls)
+            # Score right away, even while the previous attempt
+            # is still finalizing; its events wait for announce.
+            sc.start()
+        started = {"type": "wash_started", "cam_name": name,
+                   "fps": 25.0 if urls else fps}
+        def announce(sc=sc, started=started) -> None:
+            post_event(started)
+            if sc is not None:  # step frames only after wash_started
+                sc.announced()
+        events.submit(announce)
+        if cfg.record_sessions:
+            recorder = SessionRecorder(name)`,
+   cfg: "TRIGGER_DEBUG, RECORD_SESSIONS",
+   live: () => kv([["Đang rửa", S.feeder.washing ? "có" : "không"], ["Attempt của feeder", S.feeder.attN], ["Vắng tay", S.feeder.washing ? (S.now - S.feeder.lastMotion).toFixed(1) + " s / 3 s" : "—"]]) },
+
+ { id: 5, grp: "", t: "Lấy mẫu 25 fps, resize 224", short: "Chuẩn bị ảnh cho Triton, đưa vào hàng đợi", nodes: ["scorer"], act: "sample",
+   what: "Trong lúc rửa, mỗi frame camera được thu nhỏ thành ảnh 224×224 (kích thước model được train) và xếp vào hàng đợi để thread scorer gửi lên Triton.",
+   how: ["submit() lấy mẫu đúng 25 frame/giây theo đồng hồ của feeder (camera nhanh hơn thì bỏ bớt). Nếu tụt lại, nó không bao giờ lùi quá 0.5 s.",
+     "Nếu hàng đợi đã đầy (60 s frame, SCORER_BUFFER_S) thì bỏ cuộc chấm trực tiếp: lần rửa sẽ được chấm lại từ video (bước 15).",
+     "cv2.resize(frame, (224, 224)): ép thẳng 1920×1080 thành hình vuông, không giữ tỉ lệ (ngang thu 8.6 lần, dọc 4.8 lần). Giống cách cloud worker và lúc train.",
+     "cv2.cvtColor BGR → RGB vì model được train trên ảnh RGB.",
+     "Đưa (thời điểm capture, ảnh 224×224×3 uint8 ≈ 150 KB) vào hàng đợi. Thời điểm capture dùng để đo độ trễ của scorer."],
+   io: ["frame BGR 1920×1080", "ảnh RGB (224,224,3) uint8 trong hàng đợi"], hw: ["cpu", "CPU < 1%"],
+   ref: "camera/feeder.py:318–333",
+   code: String.raw`def submit(self, frame_bgr, now: float) -> None:
+    """Subsample the camera stream to TARGET_FPS and enqueue."""
+    if now < self._next_sample or self._give_up.is_set():
+        return
+    self._next_sample = max(self._next_sample + 1.0 / self._target_fps,
+                            now - 0.5)  # never fall further than 0.5s behind
+    if self._q.full():
+        self._abandon("buffer full")
+        return
+    rgb = cv2.cvtColor(
+        cv2.resize(frame_bgr, (self._img_size, self._img_size)),
+        cv2.COLOR_BGR2RGB)
+    self._q.put((now, np.ascontiguousarray(rgb, dtype=np.uint8)))`,
+   cfg: "SCORER_BUFFER_S=60",
+   live: () => { const sc = curSc(); return kv([["Frame đã đưa vào scorer", sc ? sc.t : 0], ["Đang chờ trong hàng đợi", sc ? sc.q.length + " / 1500" : 0], ["Độ trễ", sc ? sc.lag.toFixed(1) + " s" : "—"]]); } },
+
+ { id: 6, grp: "", t: "Stage model: đang ở bước nào", short: "AI #2 trên Triton, cửa sổ 24 frame trượt 12", nodes: ["scorer", "triton"], act: "stage",
+   what: "Thread scorer gom 24 frame liên tiếp (~0.96 s) thành một clip và hỏi stage model trên Triton: mỗi frame trong clip thuộc bước nào (0 = khác, 1–6 = bước WHO).",
+   how: ["HygieneScorer.feed() thêm frame vào bộ đệm 24 frame. Cứ thêm đủ 12 frame mới (STRIDE) thì gửi một cửa sổ, nên các cửa sổ chồng nhau 50%.",
+     "np.stack 24 ảnh thành mảng (24,224,224,3) uint8 ≈ 3.6 MB.",
+     "TritonStepClassifier._call() đóng gói thành InferInput 'FRAMES' và gọi client.infer() qua gRPC (timeout 30 s). Edge: gửi nguyên. Cloud: pipeline features, giảm 6 bit màu, nén gzip.",
+     "Triton trả PROBS (24,7): xác suất 7 lớp cho từng frame.",
+     "Mỗi frame nằm trong 2 cửa sổ, nên xác suất được cộng dồn rồi chia trung bình. Sau mỗi cửa sổ, các frame trước base + 12 đã có đủ 2 lần đo và được chốt.",
+     "Frame được chốt: làm mượt bằng trung bình 15 frame gần nhất (CausalProbSmoother), lấy argmax → một nhãn bước 0–6 cho frame đó.",
+     "Lỗi gọi: thử Triton dự phòng nếu có; vẫn lỗi thì retry với chờ 1, 2, 4, 5 s… và bật popup mạng trên kiosk."],
+   io: ["clip (24,224,224,3) uint8", "PROBS (24,7) → nhãn bước mỗi frame"], hw: ["remote", "máy Triton (edge/cloud)"],
+   ref: "ai_hygiene/triton_stream.py:232, 288, 394–417",
+   code: String.raw`def feed(self, frame_rgb224: np.ndarray) -> None:
+    self._buffer.append(frame_rgb224)
+    self._t += 1
+    self._since += 1
+    if len(self._buffer) == CLIP_LEN and self._since >= STRIDE:
+        self._since = 0
+        clip = np.stack(self._buffer)  # (24,224,224,3)
+        base = self._t - CLIP_LEN + 1
+        count_block = base % COUNT_STRIDE == 0
+        probs, features = self._infer_probs(clip, count_block)   # gRPC → Triton
+        if count_block:
+            self._pending_count_blocks[base] = (clip, features)
+        for k in range(CLIP_LEN):            # overlap-average
+            self._psum[base + k] += probs[k] ...
+        # Frames before base+STRIDE now have their complete average.
+        self._emit_through = base + STRIDE - 1
+        self._finalize_ready(False)          # smooth 15 → argmax → on_step()
+        self._count_ready_blocks()`,
+   cfg: "TRITON_URL, CLOUD_TRITON_URL, EDGE_TRITON_PIPELINE=standard, CLOUD_TRITON_PIPELINE=features",
+   live: () => { const sc = curSc(), c = S.calls.find(x => x.kind === "stage"); return kv([["Cửa sổ đã gửi", sc ? sc.windows : 0], ["Gần nhất", c ? `frame ${c.base}–${c.base + 23}, ${(c.rtt * 1000).toFixed(0)} ms, ${c.fail ? "lỗi" : "ok"}` : "—"], ["Nhãn đã chốt", sc ? sc.emitted : 0]]); } },
+
+ { id: 7, grp: "", t: "Count model: mỗi bước mấy lần", short: "AI #3 trên Triton, block 24 frame không chồng", nodes: ["scorer", "triton"], act: "count",
+   what: "Khi một block 24 frame (0–23, 24–47, …) đã có đủ nhãn, scorer hỏi count model: trong block này, mỗi bước được lặp bao nhiêu lần. Scorer cộng dồn kết quả qua các block.",
+   how: ["Clip của các cửa sổ có base chia hết cho 24 được giữ lại (_pending_count_blocks) để dùng cho count.",
+     "_count_ready_blocks(): khi số nhãn đã chốt ≥ base + 24, lấy clip đó cùng 24 nhãn bước (GLOBAL_STEPS int64).",
+     "Gọi count model. Edge (standard): gửi lại 24 frame 3.6 MB. Cloud (features): chỉ gửi feature (1280×24) mà stage model đã trả về, ~0.12 MB.",
+     "Triton trả COUNTS (6): số lần lặp (số thực) của bước 1–6 TRONG block này.",
+     "self._raw_counts += kết quả, rồi gửi step_counts với 6 số cộng dồn. Server làm tròn (≥ x.5 lên) để ra 'x/5' trên kiosk."],
+   io: ["clip hoặc feature + 24 nhãn", "COUNTS (6) của block → cộng dồn"], hw: ["remote", "máy Triton"],
+   ref: "ai_hygiene/triton_stream.py:307, 379–390",
+   code: String.raw`def _count_ready_blocks(self) -> None:
+    while self._next_count_base + COUNT_STRIDE <= len(self._per_frame_steps):
+        base = self._next_count_base
+        clip, features = self._pending_count_blocks.pop(base)
+        labels = np.asarray(
+            self._per_frame_steps[base:base + CLIP_LEN], dtype=np.int64)
+        self._raw_counts += self._infer_counts(clip, labels, features).astype(np.float64)
+        self._on_counts([round(float(c), 4) for c in self._raw_counts])
+        self._next_count_base += COUNT_STRIDE`,
+   cfg: "TRITON_COUNT_MODEL, CLOUD_TRITON_PIPELINE",
+   live: () => { const sc = curSc(); return kv([["Block đã đếm", sc ? sc.blocks : 0], ["raw cộng dồn", sc ? sc.raw.map(v => v.toFixed(1)).join(" · ") : "—"]]); } },
+
+ { id: 8, grp: "", t: "Gửi kết quả sang server", short: "step_frame_batch, step_counts qua HTTP", nodes: ["evt"], act: "post",
+   what: "Nhãn từng frame và số lần cộng dồn được gửi sang process server bằng HTTP POST tới 127.0.0.1:8090/events.",
+   how: ["Sau mỗi frame đưa vào HygieneScorer, các nhãn mới chốt được gom lại và gửi một lần (step_frame_batch).",
+     "_post() đợi tới khi wash_started của attempt này đã tới server; nếu scorer đã bỏ cuộc thì không gửi nữa, để kết quả cũ không lẫn vào lần rửa sau.",
+     "post_event() gửi JSON bằng urllib, kèm header X-Events-Token nếu có cấu hình. Event tiến độ: timeout 1 s, không gửi lại (event sau sẽ thay thế).",
+     "Event quan trọng (wash_started, wash_stopped, feeder_started): gửi lại tối đa 5 lần, chờ 0.5 → 4 s giữa các lần.",
+     "Server chỉ nhận /events từ loopback hoặc có token đúng."],
+   io: ["nhãn + số lần", "POST /events (JSON)"], hw: ["cpu", "CPU, nhẹ"],
+   ref: "camera/feeder.py:104, 479–492",
+   code: String.raw`def _post(self, payload: dict) -> None:
+    while not self._announced.wait(0.5):      # wait for wash_started
+        if self._give_up.is_set():
+            return
+    if not self._give_up.is_set():
+        post_event(payload)
+
+def _flush_batch(self) -> None:
+    if self._batch:
+        self._post({"type": "step_frame_batch", "step_ids": self._batch[:]})
+        self._batch.clear()`,
+   cfg: "EVENTS_TOKEN",
+   live: () => kv([["Event đã gửi", S.evN], ["Gần nhất", S.log[0] ? S.log[0].p.type : "—"]]) },
+
+ { id: 9, grp: "", t: "Ghi video MP4", short: "Encode lại bằng libx264 (hoặc copy, đề xuất)", nodes: ["rec", "disk"], act: "record",
+   what: "Song song với chấm điểm, feeder ghi lại lần rửa thành MP4 làm bằng chứng. Hiện tại nó NÉN LẠI từ ảnh đã giải nén, không dùng luồng H.264 có sẵn của camera.",
+   how: ["SessionRecorder.write() lấy mẫu 25 fps theo cùng lịch với scorer, nên frame thứ i của video ứng với nhãn thứ i.",
+     "Frame được đưa vào hàng đợi 64 frame. Nếu encode không theo kịp, frame cũ nhất bị bỏ và đếm lại để cảnh báo.",
+     "Thread nền _drain(): cv2.resize về RECORD_WIDTH×RECORD_HEIGHT (.env đang đặt 1920×1080, nên chỉ tạo một bản copy), rồi .tobytes() và ghi 6.2 MB vào pipe.",
+     "Tiến trình ffmpeg đọc pipe: chuyển BGR → YUV420, libx264 preset superfast, crf 26, GOP 50 (2 s), tune zerolatency.",
+     "File MP4 dạng fragmented: nếu tiến trình bị kill, video vẫn phát được tới 2 s cuối. Lưu ở sessions/incoming/<cam>_<ms>.mp4.",
+     "Đo trên i5: ~94% một core ở 1080p (libx264 71% + Python resize/pipe 23%). Phương án copy H.264 (RECORDING_COPY_PROPOSAL.md) gần 0%."],
+   io: ["frame BGR 25 fps", "MP4 H.264 ~5.4 Mbps"], hw: ["cpu", "CPU ~94% @1080p"],
+   ref: "camera/feeder.py:130–236",
+   code: String.raw`def _drain(self) -> None:                      # background thread
+    while True:
+        frame = self._q.get()
+        if frame is None:
+            return
+        self._writer.write(cv2.resize(frame, self._size))
+        self.frames += 1
+
+# FfmpegH264Writer
+subprocess.Popen(["ffmpeg", "-f", "rawvideo", "-pixel_format", "bgr24",
+     "-video_size", f"{w}x{h}", "-framerate", str(fps), "-i", "pipe:0",
+     "-an", "-c:v", "libx264", "-preset", cfg.record_preset, "-tune", "zerolatency",
+     "-crf", str(cfg.record_crf), "-g", "50", "-pix_fmt", "yuv420p",
+     "-movflags", "+frag_keyframe+empty_moov+default_base_moof", "-y", path], ...)
+
+def write(self, frame) -> None:
+    self._proc.stdin.write(np.ascontiguousarray(frame).tobytes())`,
+   cfg: "RECORD_SESSIONS, RECORD_WIDTH/HEIGHT (đang 1920×1080), RECORD_PRESET=superfast, RECORD_CRF=26",
+   live: () => { const a = S.feeder.att; return kv([["Chế độ", S.rec.label], ["Frame đã ghi", a ? a.rec.frames : 0], ["Dung lượng", a ? (a.rec.bytes / 1e6).toFixed(1) + " MB" : "—"], ["CPU ghi", (S.cpu.record || 0) + "%"]]); } },
+
+ { id: 10, grp: "", t: "Kết thúc lần rửa", short: "Vắng tay 3 s: flush scorer, đóng MP4, wash_stopped", nodes: ["trig", "evt"], act: "endwash",
+   what: "Khi không thấy tay trong 3 s, feeder kết thúc lần rửa. Vòng capture tiếp tục ngay; phần dọn dẹp chạy nền theo thứ tự.",
+   how: ["end_wash(): washing = False, tách scorer và recorder khỏi vòng capture (gán None).",
+     "Đưa một việc finalize vào SerialWorker. Việc này chạy tuần tự, sau mọi event đã xếp hàng trước nó.",
+     "sc.finish(): gửi tín hiệu kết thúc cho scorer, chờ nó chấm hết hàng đợi (tối đa SCORER_DRAIN_TIMEOUT_S = 60 s). Scorer flush: chốt các frame còn lại, đếm các block còn lại, gửi step_counts cuối.",
+     "Chấm không kịp trong 60 s (mạng lỗi): scorer bỏ cuộc, attempt bị đánh dấu network_interrupted. Trong lúc chờ, kiosk vẫn ở màn hình 'đang rửa'.",
+     "rec.close(): đóng stdin của ffmpeg để nó ghi nốt file. Video ngắn hơn MIN_RECORD_SECONDS bị xóa.",
+     "Gửi wash_stopped {video_path, scored, stream_interrupted, network_interrupted}."],
+   io: ["3 s không có tay", "event wash_stopped"], hw: ["cpu", "CPU, nhẹ"],
+   ref: "camera/feeder.py:780–799, 905–907",
+   code: String.raw`def end_wash() -> None:
+    """Detach the attempt from capture now; flush/close/post in background."""
+    washing = False
+    sc, rec, intr = scorer, recorder, interrupted
+    scorer, recorder, interrupted = None, None, False
+    def finalize() -> None:
+        scored = network = False
+        if sc is not None:
+            sc.finish(drain)   # flush labels + final counts first
+            scored = not sc.failed
+            network = sc.failed   # Triton unreachable / too slow: rescore later
+        video_path = rec.close() if rec else None
+        post_event({"type": "wash_stopped", "cam_name": name,
+                    "video_path": video_path, "scored": scored,
+                    "stream_interrupted": intr, "network_interrupted": network})
+    events.submit(finalize)`,
+   cfg: "MOTION_TIMEOUT_S=3, SCORER_DRAIN_TIMEOUT_S=60, MIN_RECORD_SECONDS",
+   live: () => { const d = S.serialQ.find(j => j.kind === "finalize"); return kv([["Đang chờ scorer chấm hết", d ? "có, còn " + Math.max(0, d.att.sc.deadline - S.now).toFixed(0) + " s" : "không"], ["Việc trong SerialWorker", S.serialQ.length]]); } },
+
+ { id: 11, grp: "Server", t: "Validator cộng dồn", short: "Mỗi nhãn = 1/25 s, lọc đoạn < 0.5 s", nodes: ["srv"], act: "validator",
+   what: "Server nhận từng nhãn và đưa vào WHO validator. Validator cộng thời gian từng bước, ghi nhận các đoạn liên tục, và giữ số lần mới nhất từ count model.",
+   how: ["wash_started: tạo attempt mới trong person-session (hoặc mở session mới) và một validator mới.",
+     "step_frame_batch: gọi validator.update(id) cho từng nhãn, đồng thời lưu nhãn vào attempt (dùng cho history, evidence, EHP).",
+     "update(): nếu nhãn là bước 1–6, cộng 1/25 s vào giây của bước đó và cập nhật frame bước đầu/cuối.",
+     "Đếm độ dài đoạn liên tục cùng nhãn. Đoạn dài hơn 0.5 s (> 12.5 frame) mới được 'chốt': bước đó được tính là đã làm và có segment thời gian. Đoạn ngắn hơn là blip, không tính là đã làm bước.",
+     "step_counts: thay 6 số lần cộng dồn. network_status: bật/tắt popup mạng.",
+     "Sau mỗi event, server đẩy trạng thái 'progress' xuống kiosk qua WebSocket."],
+   io: ["step_frame_batch, step_counts", "giây mỗi bước, các đoạn đã chốt, số lần"], hw: ["cpu", "CPU, nhẹ"],
+   ref: "app.py:291–342 · ai_hygiene/who_validator.py:105–136",
+   code: String.raw`def update(self, step_id: int) -> None:
+    if self._is_required(step_id):
+        if self.first_wash < 0:
+            self.first_wash = self.frame_index
+        self.last_wash = self.frame_index
+        self.step_seconds[step_id] += self.dt            # dt = 1/25 s
+    if step_id != self._cur:
+        self._cur, self._run_frames, self._committed = step_id, 1, False
+        self._run_start = self.frame_index
+    else:
+        self._run_frames += 1
+    blip_frames = self.cfg.blip_seconds * self.cfg.fps  # 0.5 s = 12.5 frame
+    if (not self._committed and self._is_required(self._cur)
+            and self._run_frames > blip_frames):
+        self.order_seq.append(self._cur)                 # step counts as performed
+        self.runs.append([self._cur, self._run_start, self.frame_index + 1])
+        self._committed = True
+    self.frame_index += 1`,
+   cfg: "MIN_STEP_COUNT=5, TOTAL_MIN_SECONDS=30, BLIP_SECONDS=0.5",
+   live: () => { const a = S.srv.att; return kv([["Nhãn đã nhận", a ? a.labels.length : 0], ["Trạng thái server", S.srv.state]]); } },
+
+ { id: 12, grp: "", t: "Kết quả lên kiosk", short: "Đủ 6 bước, ≥ 5 lần, ≥ 30 s → đạt", nodes: ["srv", "kiosk"], act: "result",
+   what: "Khi nhận wash_stopped, server chốt kết quả và hiện lên kiosk 12 giây. Lần 'rửa' không có bước nào (người đi ngang qua) bị bỏ hẳn.",
+   how: ["Nếu network_interrupted: không chấm, chuyển 'analyzing' với thông báo 'đã ghi lại, sẽ chấm lại' trong 8 s, rồi về chờ. Lần rửa được chấm lại ở bước 15.",
+     "validator.result(): thiếu bước nào (không có đoạn đã chốt), bước nào dưới 5 lần, tổng thời gian (frame bước đầu → cuối) sau làm tròn có dưới 30 s không. Riêng 29.x s được làm tròn lên 30.",
+     "Không có bước nào được chốt, hoặc tổng giây các bước < 2 s (MIN_WASH_ACTIVITY_S): coi là kích hoạt nhầm. Xóa attempt và video, không báo EHP, về idle ngay.",
+     "Còn lại: _publish_result(), trạng thái 'result', gửi kết quả cùng thời gian hiển thị xuống kiosk.",
+     "Nếu người rửa lại trong 12 s đó, wash_started mới được thêm vào CÙNG session như một attempt mới.",
+     "Hết 12 s không có ai: về idle và đóng session (bước 13)."],
+   io: ["wash_stopped", "passed, reasons, violations → kiosk"], hw: ["cpu", "CPU, nhẹ"],
+   ref: "app.py:344–403, 433 · who_validator.py:182, 217",
+   code: String.raw`elif event.type == "wash_stopped":
+    if event.network_interrupted:
+        att.rescore_status = "pending"
+        session.state = "analyzing"; session.network_notice = True
+        ...  # back to idle after NETWORK_NOTICE_S
+        return {"ok": True}
+    session.state = "analyzing"
+    result = session.validator.result() if session.validator else None
+    no_activity = (False if scorer_failed
+                   else not has_washing_activity(result) if scored_frames
+                   else bool(event.scored))
+    if get_settings().storage.drop_no_wash_attempts and no_activity:
+        sessions.discard_attempt()          # deletes the raw video too
+        session.state = "idle"
+        sessions.close_current()
+    elif result and scored_frames and not scorer_failed:
+        await _publish_result(result)       # "result" for RESULT_DISPLAY_S`,
+   cfg: "RESULT_DISPLAY_S=12, NETWORK_NOTICE_S=8, DROP_NO_WASH_ATTEMPTS=1, MIN_WASH_ACTIVITY_S=2",
+   live: () => { const a = S.srv.att; const r = a && a.result; return kv([["Trạng thái kiosk", S.srv.state], ["Kết quả", r ? (r.passed ? "đạt" : "chưa đạt") : "—"], ["Lý do", r && r.reasons.length ? r.reasons.length + " lý do" : "—"]]); } },
+
+ { id: 13, grp: "Sau lần rửa", t: "Đóng session", short: "Ghi session.json, xếp hàng việc nền", nodes: ["store"], act: "close",
+   what: "Khi kiosk về idle, person-session (có thể gồm nhiều attempt) được đóng: video chuyển vào thư mục session, mọi thứ ghi ra session.json, rồi các việc nền được xếp hàng.",
+   how: ["Chuyển từng video từ sessions/incoming/ sang sessions/<session_id>/attempt_N.mp4.",
+     "Attempt có video: evidence_status = 'queued'. Attempt cần chấm lại mà không có video: rescore_status = 'failed'.",
+     "Ghi session.json (ghi file tạm rồi đổi tên, để mất điện giữa chừng không hỏng file).",
+     "_prune(): chỉ giữ MAX_SESSIONS session mới nhất; session chưa đồng bộ xong không bị xóa.",
+     "Đưa các attempt cần render vào hàng đợi render. Attempt đang chờ chấm lại thì render sau khi chấm xong.",
+     "Đánh thức vòng sync."],
+   io: ["session trong RAM", "sessions/<id>/session.json + attempt_N.mp4"], hw: ["cpu", "CPU + đĩa"],
+   ref: "storage/session_store.py:217–243",
+   code: String.raw`def close_current(self) -> str | None:
+    sess, self.current = self.current, None
+    sdir = _cfg().sessions_dir / sess.session_id
+    for a in sess.attempts:
+        if a.video_src and Path(a.video_src).exists():
+            a.video_file = f"attempt_{a.index}{Path(a.video_src).suffix}"
+            shutil.move(a.video_src, sdir / a.video_file)
+            a.evidence_status = "queued"
+    write_json(sdir / "session.json", sess.to_json())
+    self._prune()
+    for a in sess.attempts:
+        # A rescored attempt is rendered once its new timeline is known.
+        if a.evidence_status == "queued" and a.rescore_status != "pending":
+            self._render_q.put_nowait((sid, a.index))
+    self._sync_wake.set()`,
+   cfg: "MAX_SESSIONS, SESSIONS_DIR",
+   live: () => kv([["Session đã tạo", S.sessions.length], ["Session đang mở", S.srv.session ? S.srv.session.id : "—"]]) },
+
+ { id: 14, grp: "", t: "Render evidence", short: "ffmpeg + overlay ASS lên video thô", nodes: ["render"], act: "render",
+   what: "Tạo video bằng chứng: video thô được vẽ thêm bảng thông tin (bước đang làm, đồng hồ, checklist 6 bước, tổng kết ở giây cuối), rồi nén lại.",
+   how: ["build_ass() dựng file phụ đề ASS từ nhãn từng frame và các mốc số lần: frame i hiện ở giây i/25 của video. Bố cục thiết kế trên canvas 1920×1080, libass tự co theo video.",
+     "ffprobe đọc thời lượng video để đặt phần tổng kết ở giây cuối.",
+     "ffmpeg -vf ass=… -c:v libx264 -preset veryfast -crf 26 -threads 2, chạy với nice -n 15 để không tranh CPU với capture.",
+     "Mỗi lần chỉ render một attempt. Kết quả: attempt_N_evidence.mp4.",
+     "Đo trên i5 ở 1080p: ~13.5 s CPU, 4.2 s thời gian thực cho 22 s video."],
+   io: ["attempt_N.mp4 + nhãn", "attempt_N_evidence.mp4"], hw: ["cpu", "CPU ~3 core trong lúc chạy"],
+   ref: "ai_hygiene/evidence.py:244, 389–425",
+   code: String.raw`ass_path.write_text(build_ass(attempt, video_dur), encoding="utf-8")
+# nice + capped threads keep the render from starving capture/serving.
+cmd = ["nice", "-n", "15", ffmpeg, "-hide_banner", "-loglevel", "error",
+       "-y", "-i", str(raw), "-vf", f"ass={ass_path}:fontsdir={fonts_dir}",
+       "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
+       "-threads", "2", "-an", str(out)]
+subprocess.run(cmd, check=True, timeout=600)`,
+   cfg: "EVIDENCE_FONTS_DIR",
+   live: () => jobLive("render") },
+
+ { id: 15, grp: "", t: "Rescore khi mạng lỗi", short: "Chấm lại toàn bộ video khi Triton khỏe", nodes: ["rescore", "triton"], act: "rescore",
+   what: "Nếu lúc rửa không chấm kịp (network_interrupted), server chấm lại từ video thô khi có Triton khỏe, rồi mới render và báo EHP.",
+   how: ["Vòng _rescore_loop chạy định kỳ (RESCORE_POLL_S), tìm attempt có rescore_status = 'pending' trong các session.json.",
+     "Hỏi TritonRouter có Triton nào khỏe. Không có: chờ vòng sau; quá RESCORE_GIVE_UP_S thì bỏ, đồng bộ không kèm kết quả.",
+     "rescore_video(): đọc từng frame của MP4 thô bằng OpenCV, resize 224×224 RGB, cho qua cùng HygieneScorer và WhoHandwashValidator như lúc chấm trực tiếp.",
+     "Được nhãn, số lần, kết quả mới; ghi vào session.json, tính lại final_passed, rồi đưa vào hàng đợi render.",
+     "Đúng vì video được ghi ở 25 fps theo cùng lịch với scorer: frame i của video = nhãn i."],
+   io: ["attempt_N.mp4", "frames, count_snapshots, result"], hw: ["cpu", "CPU + máy Triton"],
+   ref: "storage/session_store.py:342–415 · ai_hygiene/rescore.py:18",
+   code: String.raw`urls = await asyncio.to_thread(router.refresh) if router.enabled else []
+for sid, a, closed_at in jobs:
+    if not urls:
+        if time.time() - closed_at > give_up_s:
+            self._finish_rescore(sid, idx, None, "failed")
+        continue
+    classifier = TritonStepClassifier(urls, *get_settings().triton.models, ...)
+    out = await asyncio.to_thread(run_rescore)   # rescore_video(): read MP4,
+                                                 # resize 224, HygieneScorer
+    self._finish_rescore(sid, idx, out, "done")  # → render queue`,
+   cfg: "RESCORE_POLL_S, RESCORE_GIVE_UP_S",
+   live: () => jobLive("rescore") },
+
+ { id: 16, grp: "", t: "Upload MinIO + Kafka", short: "Gửi video lên MinIO, HandwashEvent lên EHP", nodes: ["sync", "minio", "kafka"], act: "sync",
+   what: "Khi mọi attempt của session đã render và chấm xong, video được upload lên MinIO, sau đó một HandwashEvent được gửi lên Kafka cho EHP.",
+   how: ["_sync_session() bỏ qua session còn attempt đang render hoặc chờ chấm lại, để chỉ upload bản cuối một lần.",
+     "Tạo thumbnail từ frame đầu của video thô.",
+     "Upload video thô, video evidence, thumbnail lên MinIO (có timeout/retry). Object nào lên rồi thì lần thử sau bỏ qua.",
+     "upload_status = 'uploaded'; nếu không giữ bản local thì xóa video trên đĩa.",
+     "Tạo event_code (UUID) và ghi xuống TRƯỚC khi gửi, để gửi lại vẫn cùng mã và EHP loại được bản trùng. Gửi HandwashEvent và chờ Kafka xác nhận.",
+     "Lỗi ở đâu: session giữ trạng thái pending, vòng sync sau (SYNC_INTERVAL_S) thử lại."],
+   io: ["session.json + file", "object MinIO + HandwashEvent"], hw: ["cpu", "mạng"],
+   ref: "storage/session_store.py:438–526",
+   code: String.raw`if any(a.get("evidence_status") in ("queued", "rendering")
+       or a.get("rescore_status") == "pending" for a in j["attempts"]):
+    return                                    # wait for final artifacts
+for a in j["attempts"]:
+    self._ensure_thumbnail(d, a)
+    for key, obj_key in (("video_file", "raw_object"),
+                         ("evidence_file", "evidence_object"),
+                         ("thumbnail_file", "thumbnail_object")):
+        ...
+        sync.upload(str(path), obj)
+j["upload_status"] = "uploaded"
+...
+if not j.get("event_code"):
+    j["event_code"] = str(uuid.uuid4())       # persisted BEFORE the first send
+    write_json(f, j)
+producer.send_session_event(self._event_payload(j), key=j["session_id"])
+j["event_status"] = "sent"`,
+   cfg: "MINIO_ENDPOINT, KAFKA_BOOTSTRAP_SERVERS, SYNC_INTERVAL_S, UPLOAD_RAW, KEEP_LOCAL_AFTER_UPLOAD",
+   live: () => jobLive("sync") },
+];
+function kv(rows) { return `<div class="kvs">${rows.map(([k, v]) => `<span>${k}</span><span>${esc(v)}</span>`).join("")}</div>`; }
+function curSc() { return S.feeder.att ? S.feeder.att.sc : null; }
+function jobLive(node) {
+  const j = S.jobs.find(x => x.stages.some(s => s.node === node && s.state !== "done")) || [...S.jobs].reverse().find(x => x.stages.some(s => s.node === node));
+  if (!j) return `<span class="muted">Chưa có việc ${node} nào.</span>`;
+  return kv(j.stages.filter(s => s.node === node).map(s => [s.name + " · " + j.sess.id, s.state === "done" ? "xong" : s.state === "run" ? (s.p * 100).toFixed(0) + "%" : s.state === "blocked" ? "chờ Triton" : "đang chờ"]));
+}
+
+
+// ---------------------------------------------------------------- state
+let S;
+const ui = { gatedev: "GPU", triton: "edge", recmode: "enc1080" };
+const HOME = { x: 0.13, y: 0.5 };
+function reset() {
+  S = {
+    now: 0, k: 0, rec: REC[ui.recmode], T: [], reps: [0, 0, 0, 0, 0, 0],
+    hand: { ...HOME }, step: 0, drag: null, demo: null, netDown: false, camDown: false,
+    stream: { up: true, frame: 0 },
+    gate: { next: 0, busyUntil: -1, pendingT: null, seq: 0, seen: 0, detected: false, boxUntil: -1, conf: 0 },
+    feeder: { washing: false, lastMotion: -99, interrupted: false, att: null, attN: 0 },
+    scorers: [], serialQ: [], inbox: [], log: [], evN: 0, calls: [], probs: null, probsAt: -1,
+    srv: { state: "idle", session: null, att: null, popup: false, lag: 0, until: 0, cameraStatus: "ONLINE", sessN: 0, dropMsg: null },
+    sessions: [], jobs: [], cpu: {}, gpu: 0, act: {}, lastBlock: null, film: { n: -1, total: 0 },
+  };
+  document.getElementById("netdown").checked = false; document.getElementById("camdown").checked = false;
+  renderPicker();
+}
+function act(k) { S.act[k] = performance.now(); }
+function isActive(k, ms = 1200) { return performance.now() - (S.act[k] || -1e9) < ms; }
+
+// ---------------------------------------------------------------- ground truth from the user's hands
+function inZone(h) { const z = C.ZONE; return h.x >= z[0] && h.x <= z[2] && h.y >= z[1] && h.y <= z[3]; }
+function recordTruth() {
+  const iz = S.stream.up && inZone(S.hand) && !S.drag;
+  const label = iz ? S.step : 0;
+  if (iz && S.step > 0) S.reps[S.step - 1] += 1.0 * DT;   // ~1 rep/s while rubbing
+  S.T[S.k] = { label, iz, reps: S.reps.slice() };
+}
+const idx = t => Math.max(0, Math.min(S.T.length - 1, Math.round(t / DT)));
+const labelAt = t => (S.T[idx(t)] || { label: 0 }).label;
+const repsAt = (step, t) => (S.T[idx(t)] || { reps: [0, 0, 0, 0, 0, 0] }).reps[step - 1];
+const tritonOk = () => !S.netDown;
+const tritonRtt = kind => ui.triton === "cloud" ? (kind === "stage" ? 0.35 : 0.12) : (kind === "stage" ? 0.07 : 0.04);
+
+// ---------------------------------------------------------------- events
+function post(payload, viaSerial) { if (viaSerial) S.serialQ.push({ kind: "post", payload }); else { S.inbox.push({ at: S.now + 0.006, payload }); act("post"); } }
+function deliver(p) { S.evN++; S.log.unshift({ t: S.now, p }); if (S.log.length > 60) S.log.pop(); serverHandle(p); }
+
+// ---------------------------------------------------------------- feeder (camera/feeder.py)
+function feederTick() {
+  const f = S.feeder, st = S.stream, now = S.now;
+  if (st.up && S.camDown) { st.up = false; post({ type: "camera_status", cam_name: "hcm_camera_01", status: "RECONNECTING" }, true); if (f.washing) f.interrupted = true; }
+  else if (!st.up && !S.camDown) { st.up = true; post({ type: "camera_status", cam_name: "hcm_camera_01", status: "ONLINE" }, true);
+    if (f.washing) { if (now - f.lastMotion > C.MOTION_TIMEOUT + C.STREAM_GRACE) endWash(); else f.lastMotion = now; } }
+  if (!st.up) { if (f.washing && now - f.lastMotion > C.MOTION_TIMEOUT + C.STREAM_GRACE) endWash(); return; }
+  st.frame++; act("decode");
+  const g = S.gate, lat = ui.gatedev === "GPU" ? 0.025 : 0.15;
+  if (g.pendingT !== null && now >= g.busyUntil) {
+    const T = S.T[idx(g.pendingT)]; g.detected = !!(T && T.iz); g.seq++;
+    if (g.detected) { g.boxUntil = now + 0.3; g.conf = 0.9 + Math.random() * 0.08; }
+    g.pendingT = null;
+  }
+  if (st.frame % C.GATE_EVERY === 0 && now >= g.next && g.pendingT === null) { g.pendingT = now; g.busyUntil = now + lat; g.next = now + 1 / C.GATE_HZ; act("gate"); }
+  let hit = false;
+  if (g.seq > g.seen) { g.seen = g.seq; hit = g.detected; }
+  if (hit) { f.lastMotion = now; if (!f.washing) startWash(); }
+  if (f.washing) {
+    const a = f.att; a.sc.q.push({ capT: now }); act("sample"); act("record");
+    a.rec.frames++; a.rec.bytes += S.rec.mbps * 1e6 / 8 / FPS;
+    if (now - f.lastMotion > C.MOTION_TIMEOUT) endWash();
+  }
+}
+function startWash() {
+  const f = S.feeder, now = S.now; f.washing = true; f.attN++; act("trigger");
+  const rec = { frames: 0, bytes: 0, preroll: 0, path: `sessions/incoming/hcm_camera_01_${Math.round(1763700000000 + now * 1000)}.mp4` };
+  const sc = newScorer(f.attN);
+  if (S.rec.copy) { const kf = Math.floor(now * FPS / C.GOP) * C.GOP / FPS, n = Math.round((now - kf) * FPS);
+    for (let i = 0; i < n; i++) sc.q.push({ capT: kf + i / FPS }); rec.preroll = n / FPS; rec.frames += n; }
+  f.att = { n: f.attN, t0: now, sc, rec }; f.interrupted = false; S.scorers.push(sc);
+  S.serialQ.push({ kind: "post", payload: { type: "wash_started", cam_name: "hcm_camera_01", fps: 25.0 }, announce: sc });
+}
+function endWash() {
+  const f = S.feeder; if (!f.washing) return; f.washing = false; act("endwash");
+  const a = f.att; a.sc.finishing = true; a.sc.deadline = S.now + C.DRAIN_S;
+  S.serialQ.push({ kind: "finalize", att: a, intr: f.interrupted }); f.interrupted = false;
+}
+function serialTick() {
+  while (S.serialQ.length) {
+    const j = S.serialQ[0];
+    if (j.kind === "post") { deliver(j.payload); if (j.announce) j.announce.announced = true; S.serialQ.shift(); continue; }
+    const sc = j.att.sc;
+    if (!sc.done) { if (S.now > sc.deadline) abandon(sc, "drain timeout"); else break; }
+    const path = j.att.rec.frames >= 25 ? j.att.rec.path : null;
+    deliver({ type: "wash_stopped", cam_name: "hcm_camera_01", video_path: path, scored: !sc.failed, stream_interrupted: j.intr, network_interrupted: sc.failed });
+    S.serialQ.shift();
+  }
+}
+
+// ---------------------------------------------------------------- scorer (ScorerWorker + HygieneScorer)
+function newScorer(n) {
+  return { n, q: [], capT: [], t: 0, since: 0, pending: null, retryCall: null, retryAt: 0, delay: 1, emitted: 0, countNext: 0, lastBase: -1,
+    windows: 0, blocks: 0, raw: [0, 0, 0, 0, 0, 0], held: [], announced: false, finishing: false, deadline: 0, done: false, failed: false,
+    reason: null, failing: false, degraded: false, clearSince: null, lag: 0, flushed: false, retries: 0 };
+}
+function abandon(sc, why) { sc.failed = true; sc.done = true; sc.reason = sc.reason || why; sc.q.length = 0; sc.held.length = 0; sc.pending = null; }
+function scPost(sc, p) { if (sc.failed) return; if (sc.announced) post(p, false); else sc.held.push(p); }
+function issue(sc, call) {
+  call.start = S.now; call.target = ui.triton;
+  if (!tritonOk()) { call.end = S.now + 3.0; call.fail = true; } else { call.end = S.now + tritonRtt(call.kind); call.fail = false; }
+  sc.pending = call; act(call.kind);
+}
+function scorerTick(sc) {
+  if (sc.done) return;
+  if (sc.announced && sc.held.length) { for (const p of sc.held) post(p, false); sc.held.length = 0; }
+  const now = S.now;
+  if (sc.q.length > C.BUFFER_S * FPS) { abandon(sc, "buffer full"); return; }
+  if (sc.finishing && now > sc.deadline) { abandon(sc, "drain timeout"); return; }
+  sc.lag = (sc.pending || sc.retryCall || sc.q.length) && sc.t > 0 ? Math.max(0, now - (sc.capT[sc.t - 1] ?? now)) : 0;
+  if (!sc.degraded) { if (sc.failing || sc.lag > C.LAG_WARN) { sc.degraded = true; sc.clearSince = null; scPost(sc, { type: "network_status", cam_name: "hcm_camera_01", degraded: true, lag_s: +sc.lag.toFixed(1) }); } }
+  else if (sc.failing || sc.lag >= C.LAG_CLEAR) sc.clearSince = null;
+  else { sc.clearSince = sc.clearSince ?? now; if (now - sc.clearSince >= C.CLEAR_HOLD) { sc.degraded = false; scPost(sc, { type: "network_status", cam_name: "hcm_camera_01", degraded: false, lag_s: +sc.lag.toFixed(1) }); } }
+  for (let guard = 0; guard < 400; guard++) {
+    if (sc.pending) {
+      if (now < sc.pending.end) return;
+      const c = sc.pending; sc.pending = null;
+      S.calls.unshift({ t: c.start, kind: c.kind, base: c.base, target: c.target, rtt: c.end - c.start, fail: c.fail }); if (S.calls.length > 8) S.calls.pop();
+      if (c.fail) { sc.failing = true; sc.retries++; sc.retryCall = c; sc.retryAt = now + sc.delay; sc.delay = Math.min(sc.delay * 2, 5); return; }
+      sc.failing = false; sc.delay = 1;
+      if (c.kind === "stage") {
+        sc.lastBase = c.base; sc.windows++;
+        // PROBS (24,7): averaged here for display
+        const p = [0, 0, 0, 0, 0, 0, 0];
+        for (let i = 0; i < C.CLIP; i++) { const l = labelAt(sc.capT[c.base + i]); for (let k = 0; k < 7; k++) p[k] += (k === l ? 0.86 : 0.14 / 6) + (Math.random() - 0.5) * 0.02; }
+        const sum = p.reduce((a, b) => a + Math.max(0, b), 0); S.probs = p.map(v => Math.max(0, v) / sum); S.probsAt = performance.now();
+        emitLabels(sc, c.base + C.STRIDE - 1);
+      } else {
+        const tEnd = sc.capT[c.base + C.CLIP - 1], prev = sc.raw;
+        sc.raw = [1, 2, 3, 4, 5, 6].map(s => +(repsAt(s, tEnd) * 0.97).toFixed(2));
+        S.lastBlock = { base: c.base, labels: Array.from({ length: C.CLIP }, (_, i) => labelAt(sc.capT[c.base + i])), delta: sc.raw.map((v, i) => v - prev[i]), rtt: c.end - c.start };
+        sc.blocks++; sc.countNext += C.CLIP;
+        scPost(sc, { type: "step_counts", cam_name: "hcm_camera_01", raw_counts: sc.raw.slice() });
+      }
+      continue;
+    }
+    if (sc.retryCall) { if (now < sc.retryAt) return; const c = sc.retryCall; sc.retryCall = null; issue(sc, { kind: c.kind, base: c.base }); continue; }
+    if (sc.emitted >= sc.countNext + C.CLIP) { issue(sc, { kind: "count", base: sc.countNext }); continue; }
+    if (sc.q.length) {
+      let issued = false;
+      while (sc.q.length) { const fr = sc.q.shift(); sc.capT[sc.t] = fr.capT; sc.t++; sc.since++;
+        if (sc.t >= C.CLIP && sc.since >= C.STRIDE) { sc.since = 0; issue(sc, { kind: "stage", base: sc.t - C.CLIP }); issued = true; break; } }
+      if (issued) continue; return;
+    }
+    if (sc.finishing && !sc.flushed) { sc.flushed = true; if (sc.lastBase >= 0) emitLabels(sc, sc.lastBase + C.CLIP - 1); continue; }
+    if (sc.finishing && sc.flushed) { scPost(sc, { type: "step_counts", cam_name: "hcm_camera_01", raw_counts: sc.raw.slice() }); sc.done = true; return; }
+    return;
+  }
+}
+function emitLabels(sc, through) {
+  const ids = []; for (let i = sc.emitted; i <= through && i < sc.t; i++) ids.push(labelAt(sc.capT[i]));
+  sc.emitted += ids.length; if (ids.length) scPost(sc, { type: "step_frame_batch", cam_name: "hcm_camera_01", step_ids: ids });
+}
+
+// ---------------------------------------------------------------- server (app.py + who_validator.py)
+function validate(labels, raw) {
+  const sec = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 }, present = new Set();
+  let first = -1, last = -1, cur = -1, run = 0, committed = false;
+  labels.forEach((l, i) => {
+    if (l >= 1 && l <= 6) { if (first < 0) first = i; last = i; sec[l] += 1 / FPS; }
+    if (l !== cur) { cur = l; run = 1; committed = false; } else run++;
+    if (!committed && cur >= 1 && cur <= 6 && run > C.BLIP_FRAMES) { present.add(cur); committed = true; }
+  });
+  const total = first < 0 ? 0 : (last - first + 1) / FPS;
+  const rounded = total > C.TOTAL_MIN - 1 + 1e-9 ? Math.ceil(total - 1e-9) : Math.floor(total + 0.5);
+  const counts = {}; for (let s = 1; s <= 6; s++) counts[s] = Math.floor(Math.max(0, raw[s - 1] || 0) + 0.5);
+  const missing = [1, 2, 3, 4, 5, 6].filter(s => !present.has(s));
+  const under = [1, 2, 3, 4, 5, 6].filter(s => counts[s] < C.MIN_COUNT);
+  const low = under.filter(s => !missing.includes(s)), reasons = [];
+  if (missing.length) reasons.push("Thiếu bước: " + missing.map(s => "B" + s).join(", "));
+  if (low.length) reasons.push("Chưa đủ 5 lần: " + low.map(s => `B${s} (${counts[s]}/5)`).join(", "));
+  if (rounded < C.TOTAL_MIN) reasons.push(`Rửa quá ngắn: ${rounded} s (tối thiểu 30 s)`);
+  const active = Object.values(sec).reduce((a, b) => a + b, 0);
+  return { passed: !missing.length && !under.length && rounded >= C.TOTAL_MIN, total, rounded, sec, counts, present, missing, under, reasons, active, anyStep: present.size > 0 };
+}
+function serverHandle(p) {
+  const v = S.srv, now = S.now;
+  switch (p.type) {
+    case "camera_status": v.cameraStatus = p.status; break;
+    case "wash_started":
+      if (!(v.state === "result" && v.session)) { v.sessN++; v.session = { id: `s${String(v.sessN).padStart(3, "0")}`, attempts: [] }; S.sessions.unshift(v.session); }
+      v.att = { idx: v.session.attempts.length + 1, labels: [], raw: [0, 0, 0, 0, 0, 0], result: null };
+      v.session.attempts.push(v.att); v.state = "washing"; v.popup = false; v.dropMsg = null; break;
+    case "step_frame_batch": if (v.state === "washing" && v.att) { v.att.labels.push(...p.step_ids); act("validator"); } break;
+    case "step_counts": if (v.state === "washing" && v.att) v.att.raw = p.raw_counts.slice(); break;
+    case "network_status": if (v.state === "washing") { v.popup = p.degraded; v.lag = p.lag_s; } break;
+    case "wash_stopped": {
+      if (v.state !== "washing" || !v.att) break;
+      v.popup = false; const a = v.att; a.flags = p;
+      if (p.network_interrupted) { a.rescore = "pending"; v.state = "analyzing"; v.until = now + C.NOTICE_S; act("result"); break; }
+      const r = validate(a.labels, a.raw); a.result = r; act("result");
+      if (!r.anyStep || r.active < C.MIN_ACTIVE) { v.session.attempts.pop(); v.att = null; v.state = "idle";
+        v.dropMsg = { t: now }; closeSession(); break; }
+      v.state = "result"; v.until = now + C.RESULT_S; break;
+    }
+  }
+}
+function serverTick() {
+  const v = S.srv;
+  while (S.inbox.length && S.inbox[0].at <= S.now) deliver(S.inbox.shift().payload);
+  if ((v.state === "result" || v.state === "analyzing") && S.now >= v.until) { v.state = "idle"; closeSession(); }
+}
+function closeSession() {
+  const v = S.srv, s = v.session; if (!s) return; v.session = null;
+  if (!s.attempts.length) return;
+  act("close");
+  for (const a of s.attempts) {
+    const videoS = Math.max(1, a.labels.length / FPS), st = [];
+    if (a.rescore === "pending") st.push({ name: "rescore", node: "rescore", dur: videoS * 0.12, need: "triton" });
+    st.push({ name: "render evidence", node: "render", dur: Math.max(0.6, videoS * S.rec.render) });
+    for (const [n, d] of [["thumbnail", 0.2], ["upload MinIO", 2.5], ["Kafka HandwashEvent", 0.2]]) st.push({ name: n, node: "sync", dur: d });
+    S.jobs.push({ sess: s, att: a, stages: st.map(x => ({ ...x, state: "wait", p: 0 })) });
+  }
+}
+function jobsTick() {
+  const job = S.jobs.find(j => j.stages.some(s => s.state !== "done")); if (!job) return;
+  const st = job.stages.find(s => s.state !== "done");
+  if (st.need === "triton" && !tritonOk()) { st.state = "blocked"; return; }
+  if (st.state !== "run") { st.state = "run"; st.t0 = S.now; }
+  st.p = Math.min(1, (S.now - st.t0) / st.dur); act(st.node);
+  if (st.p >= 1) { st.state = "done"; if (st.node === "rescore") { job.att.rescore = "done"; } }
+}
+function cpuTick() {
+  const run = (S.jobs.find(j => j.stages.some(s => s.state === "run")) || { stages: [] }).stages.find(s => s.state === "run");
+  S.cpu = { decode: S.stream.up ? (S.rec.copy ? 37 : 30) : 0, gate: ui.gatedev === "GPU" ? (S.stream.up ? 3 : 0) : (S.stream.up ? 60 : 0),
+    resize: S.feeder.washing ? 0.6 : 0, record: S.feeder.washing ? S.rec.cpu : 0, render: run && run.node === "render" ? 320 * (S.rec.render / 0.19) : 0,
+    rescore: run && run.node === "rescore" ? 45 : 0, other: 4 + (S.feeder.washing ? 3 : 0) };
+  S.gpu = ui.gatedev === "GPU" && S.stream.up ? 10 : 0;
+}
+
+// ---------------------------------------------------------------- demo script (one compliant wash)
+const DEMO = [[0, "in", 0], [1.0, "step", 1], [7.2, "step", 2], [13.4, "step", 3], [19.6, "step", 4], [25.8, "step", 5], [32.0, "step", 6], [38.2, "step", 0], [39.0, "out"]];
+function demoTick() {
+  const d = S.demo; if (!d) return;
+  const t = S.now - d.t0;
+  while (d.i < DEMO.length && t >= DEMO[d.i][0]) {
+    const [, what, step] = DEMO[d.i++];
+    if (what === "in") { d.anim = { from: { ...S.hand }, to: { x: 0.5, y: 0.66 }, t0: S.now, dur: 0.6 }; S.step = 0; }
+    else if (what === "out") { d.anim = { from: { ...S.hand }, to: { ...HOME }, t0: S.now, dur: 0.6 }; S.step = 0; }
+    else S.step = step;
+    renderPicker();
+  }
+  if (d.anim) { const k = Math.min(1, (S.now - d.anim.t0) / d.anim.dur), e = k * k * (3 - 2 * k);
+    S.hand = { x: d.anim.from.x + (d.anim.to.x - d.anim.from.x) * e, y: d.anim.from.y + (d.anim.to.y - d.anim.from.y) * e }; if (k >= 1) d.anim = null; }
+  if (d.i >= DEMO.length && !d.anim) S.demo = null;
+}
+
+function step() {
+  S.now = +(S.now + DT).toFixed(4); S.k++;
+  demoTick(); recordTruth(); feederTick();
+  for (const sc of S.scorers) scorerTick(sc);
+  S.scorers = S.scorers.filter(sc => !sc.done || (S.feeder.att && S.feeder.att.sc === sc) || S.serialQ.some(j => j.att && j.att.sc === sc));
+  serialTick(); serverTick(); jobsTick(); cpuTick();
+}
+
+// ---------------------------------------------------------------- camera canvas + drag
+const cam = document.getElementById("cam"), cx = cam.getContext("2d"), W = 960, H = 540;
+function rr(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+// Hand artwork: Microsoft Fluent Emoji (MIT), medium-light skin tone, embedded as data URIs.
+const HAND_IMG = { palm: new Image(), back: new Image() };
+HAND_IMG.palm.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTcuMDE3MzUgNy4yOTAxOUM4LjMxMzUyIDcuMjkwMTkgOC43MDMxNSA3Ljk5OTk5IDguNzAzMTUgNy45OTk5OUw4Ljc5NjkgNi4xNzE4N0M4Ljg3NTAzIDUuMjEyMDcgOS45OTc4MSA0LjI1ODk0IDExLjA0ODEgNC4yNTg5NEMxMi40ODQ0IDQuMjU4OTQgMTMuMDMxMyA1LjI5Njg3IDEzLjAzMTMgNS4yOTY4N0MxMi45Mzc1IDMuMDkzNzQgMTMuNzMzNiAxLjk5MzMyIDE1LjcxMTIgMS45OTMzMkMxNy4zMTI1IDIuMDkzNzQgMTcuOTcwMiAzLjYxNzE4IDE3Ljg0MzggNS4yOTY4N0MxNy44NDM4IDUuMjk2ODcgMTguNTE1NyAzLjk4NDM3IDIwLjM3NDMgNC4xNDk1N0MyMS40MjA1IDQuMjQyNTYgMjIuMjY1NyA1LjI5Njg3IDIyLjI2NTcgNy4wNjI0OUwyMi4wNzgyIDE0Ljc1QzIyLjA3ODIgMTQuNzUgMjMuMjY4NiAxMy4wMjcgMjQuMTU2MyAxMi41MTU2QzI1LjA0MzkgMTIuMDA0MiAyNi41MTAyIDEyLjAzNjEgMjcuMjM0NSAxMi44MDU4QzI4LjA4NjIgMTMuNzEwNyAyOC4yNDA5IDE1LjEyODggMjcuNjI5OCAxNS45OTMzQzI1LjM0MzggMTguOTM3NSAyMy4xNTYzIDIyLjIxODcgMjIuNDg0NCAyMy41NzgxQzIwLjY5MTkgMjcuMjA0OCAxNy45NTMyIDMwLjAwNjcgMTQuMjg4NiAzMC4wMDY3QzkuODQzNzggMzAuMDA2NyA1LjczNTkzIDI2Ljc1IDUuMjUwMDMgMjAuODEyNUM0Ljc2NDEyIDE0Ljg3NSA0LjcwMTYyIDEwLjAwODkgNC43MDE2MiAxMC4wMDg5QzQuNjIyNTkgOC45NjIwNyA1LjQ0NDU1IDcuMjkwMTkgNy4wMTczNSA3LjI5MDE5WiIgZmlsbD0iI0VFQkZBQSIvPgo8cGF0aCBkPSJNMTMuOTUyIDQuNDk4NjNMMTQuNDgzMiAxMi4yNzI0QzE0LjUwMiAxMi41NDc5IDE0LjI5MzkgMTIuNzg2NSAxNC4wMTg0IDEyLjgwNTNDMTMuNzQyOSAxMi44MjQxIDEzLjUwNDMgMTIuNjE2MSAxMy40ODU1IDEyLjM0MDZMMTMuMDAwNyA1LjI0NTQ5QzEzLjAyMTQgNS4yNzgwNiAxMy4wMzEzIDUuMjk2ODcgMTMuMDMxMyA1LjI5Njg3QzEyLjk0MjkgMy4yMTgzMyAxMy42NDY0IDIuMTIxMyAxNS4zODcgMi4wMDM4OEwxNS4zODY5IDIuMDE1NjFDMTQuOTEwMyAyLjAxMjA0IDE0LjU1MjkgMi4yMzY1MSAxNC4zMDMgMi42NTA4OUMxNC4wNDE0IDMuMDg0NjcgMTMuOTAyIDMuNzMxNTIgMTMuOTUyIDQuNDk4NjNaIiBmaWxsPSIjRDZBMDg5Ii8+CjxwYXRoIGQ9Ik0xNy44NDM4IDUuMjk2ODZDMTcuODUwNCA1LjIwOTU5IDE3Ljg1NDggNS4xMjI3NCAxNy44NTcxIDUuMDM2NDlDMTcuNjk3MiA1LjUxNDIgMTcuNjEyOCA2LjA0NTkgMTcuNTk0IDYuNTkyMjFMMTcuNTkzOSA2LjU5OTE4TDE3LjQ2ODkgMTIuNzM5OEMxNy40NjMyIDEzLjAxNTkgMTcuNjgyNSAxMy4yNDQzIDE3Ljk1ODYgMTMuMjQ5OUMxOC4yMzQ3IDEzLjI1NTUgMTguNDYzIDEzLjAzNjIgMTguNDY4NiAxMi43NjAyTDE4LjU5MzYgNi42MjMxQzE4LjYyMDUgNS44NTEyNSAxOC43OTc0IDUuMjAyNDQgMTkuMDgyOCA0Ljc2NDFDMTkuMzIgNC4zOTk2OCAxOS42MjU3IDQuMTgzOTYgMjAuMDE0OCA0LjEzNTQ0QzE4LjQyODIgNC4xNTUxOCAxNy44NDM4IDUuMjk2ODYgMTcuODQzOCA1LjI5Njg2WiIgZmlsbD0iI0Q2QTA4OSIvPgo8cGF0aCBkPSJNMTAuMDM1NiAxNy42MjM3QzExLjE5ODcgMTcuNTQwNyAxMi45OTE5IDE3LjQzMjIgMTQuODA1NyAxNy41MTYxQzE2LjAzOCAxNy41NzMyIDE3LjI0MzMgMTcuNzE4MSAxOC4yNTU5IDE4LjAwMkMxNy43NDU2IDE4LjE3MjkgMTcuMTMxMiAxOC40MDU4IDE2LjQ2MTggMTguNzE1NUMxNC42NDE4IDE5LjU1NzMgMTIuMzg3NyAyMC45NzkxIDEwLjcyNjYgMjMuMjkxNkMxMC41NjU1IDIzLjUxNTkgMTAuNjE2NyAyMy44MjgzIDEwLjg0MSAyMy45ODk0QzExLjA2NTMgMjQuMTUwNSAxMS4zNzc3IDI0LjA5OTMgMTEuNTM4OCAyMy44NzVDMTMuMDY1MSAyMS43NTAxIDE1LjE1NDggMjAuNDIxOCAxNi44ODE3IDE5LjYyMzFDMTcuNzQyOSAxOS4yMjQ3IDE4LjUwNyAxOC45NjEyIDE5LjA1NDIgMTguNzk3OEMxOS4zMjc1IDE4LjcxNjEgMTkuNTQ2MSAxOC42NTk2IDE5LjY5NDcgMTguNjIzOEMxOS43NjkgMTguNjA1OSAxOS44MjU4IDE4LjU5MzIgMTkuODYzMiAxOC41ODUxTDE5LjkwNDQgMTguNTc2NEwxOS45MTM2IDE4LjU3NDVMMTkuOTE1IDE4LjU3NDNDMjAuMTIxNyAxOC41MzQyIDIwLjI4MTUgMTguMzY4OCAyMC4zMTQxIDE4LjE2MDhDMjAuMzQ2OCAxNy45NTI3IDIwLjI0NTUgMTcuNzQ2NCAyMC4wNjA4IDE3LjY0NUMxOC42NzkyIDE2Ljg4NjUgMTYuNzA4NSAxNi42MDMyIDE0Ljg1MiAxNi41MTcyQzEyLjk3NjUgMTYuNDMwNCAxMS4xMzQ3IDE2LjU0MjcgOS45NjQzOCAxNi42MjYzQzkuNjg4OTQgMTYuNjQ2IDkuNDgxNiAxNi44ODUyIDkuNTAxMjcgMTcuMTYwNkM5LjUyMDk0IDE3LjQzNjEgOS43NjAxOCAxNy42NDM0IDEwLjAzNTYgMTcuNjIzN1oiIGZpbGw9IiNENkEwODkiLz4KPHBhdGggZD0iTTguNzA0MSA3Ljk3OTg4TDguNzk2ODIgNi4xNzE4N0M4Ljg3NDE4IDUuMjIxNDYgOS45NzU4NSA0LjI3NzYgMTEuMDE3MiA0LjI1OTIyQzEwLjU2NzUgNC4zMzE4NiAxMC4yNjc3IDQuNDYzMzIgMTAuMDY0OCA0LjYxNDUzQzkuODY2MSA0Ljc2MjYzIDkuNzM1OTcgNC45NDc1NCA5LjY1MDk5IDUuMTcxNTFDOS40Njk3MSA1LjY0OTI5IDkuNDk1MzMgNi4yOTAzOCA5LjU4OTU2IDcuMDYxMzJMMTAuNDU1IDEzLjQ5NThDMTAuNDkxOCAxMy43Njk1IDEwLjI5OTggMTQuMDIxMiAxMC4wMjYxIDE0LjA1OEM5Ljc1MjQyIDE0LjA5NDggOS41MDA3MyAxMy45MDI4IDkuNDYzOTIgMTMuNjI5MUw4LjcwNDEgNy45Nzk4OFoiIGZpbGw9IiNENkEwODkiLz4KPC9zdmc+Cg==";
+HAND_IMG.back.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTI1LjE1NjIgNy4yNjU2MkMyMy44NzUgNy4yNjU2MiAyMy4yMTA5IDguMTI1IDIzLjIxMDkgOC4xMjVWNi4yMDMxMkMyMy4yMTA5IDUuMTY0ODkgMjIuMjEwMSA0LjIzNDM4IDIxLjE3MTkgNC4yMzQzOEMxOS4yMTg4IDQuMjM0MzggMTguODkwNiA1LjM5MDYyIDE4Ljg5MDYgNS4zOTA2MkMxOC44OTA2IDUuMzkwNjIgMTguODc1IDQuNDg0MzggMTguNzM0NCAzLjcwMzEyQzE4LjU5MzggMi45MjE4OCAxNy42MDA3IDEuOTY4NzUgMTYuNTYyNSAxLjk2ODc1QzE0LjYxOTIgMS45Njg3NSAxMy44ODI4IDMuNTA3ODEgMTQuMDA3OCA1LjE4NzVDMTQuMDA3OCA1LjE4NzUgMTMuMzU5NCA0LjEyNSAxMS45NTMxIDQuMTI1QzEwLjkxNDkgNC4xMjUgOS40NjA5NCA1LjEwOTM4IDkuNjMyODEgNy4wMjM0NEw5Ljk5MjE5IDE0LjU3ODFDOS45OTIxOSAxNC41NzgxIDguOTU1NDUgMTMuMDExNCA4LjA3ODA0IDEyLjVDNy4yMDA2MyAxMS45ODg2IDUuODg3ODYgMTIuMDExNSA1LjE3MTg0IDEyLjc4MTJDNC4zMzAwMyAxMy42ODYxIDQuMTc3MDMgMTUuMTA0MiA0Ljc4MTE0IDE1Ljk2ODhDNi41OTM2MyAxOC41NjI1IDkuMTY2MjIgMjEuOTUxMSA5LjY1NjE5IDIzLjUzMTJDMTAuOTA2MiAyNy41NjI1IDE0LjU2MjUgMjkuOTgyMSAxNy45Njg4IDI5Ljk4MjFDMjIuMDc4MSAyOS45ODIxIDI2LjM5MTkgMjYuODg0MSAyNi43MzQ0IDIyLjEwOTRMMjcuNDQ1MyA5Ljk4NDM4QzI3LjUyMzQgOC45Mzc1IDI2LjcxMDkgNy4yNjU2MiAyNS4xNTYyIDcuMjY1NjJaIiBmaWxsPSIjRUVCRkFBIi8+CjxwYXRoIGQ9Ik0xNC45Nzk3IDQuNjcyNTJDMTQuOTcgNC4xNjAzOSAxNC45NTgzIDMuNTQ2MTggMTUuMDg4IDMuMDAwNDZDMTUuMTY2NSAyLjY3MDE5IDE1LjI4NjMgMi40MjIzNSAxNS40NDYzIDIuMjYwNjRDMTUuNTExOCAyLjE5NDQzIDE1LjU5MTIgMi4xMzUyIDE1LjY5MTcgMi4wOTAwMUMxNC4zOTgyIDIuNDg0NDcgMTMuOTAzNiAzLjc4NzE0IDE0LjAwNzggNS4xODc1NkMxNC4wMDc4IDUuMTg3NTYgMTQuMDAxNiA1LjE3NzQxIDEzLjk4OTEgNS4xNTkxMUwxNC4yOTczIDEyLjgwMTRDMTQuMzA4NCAxMy4wNzc0IDE0LjU0MTEgMTMuMjkyIDE0LjgxNyAxMy4yODA5QzE1LjA5MyAxMy4yNjk4IDE1LjMwNzYgMTMuMDM3MSAxNS4yOTY1IDEyLjc2MTJMMTQuOTg0NCA1LjAyMTA3QzE0Ljk4NDIgNC45MTIzMyAxNC45ODIgNC43OTUzNiAxNC45Nzk3IDQuNjcyNTJaIiBmaWxsPSIjRDZBMDg5Ii8+CjxwYXRoIGQ9Ik0xNi4xNzE5IDIuMDAwMDZDMTYuMTQyNSAyLjAwMDA2IDE2LjExNDEgMi4wMDA3OSAxNi4wODY3IDIuMDAyMjJDMTYuMTE0OCAxLjk5ODA5IDE2LjE0MzIgMS45OTQzNCAxNi4xNzE5IDEuOTkwOTdWMi4wMDAwNloiIGZpbGw9IiNENkEwODkiLz4KPHBhdGggZD0iTTE4Ljg5MDIgNS4zNjk1QzE4Ljg1OTcgNS41NTUzMSAxOC44NDQ0IDUuNzQyMzMgMTguODQzOCA1LjkyNjAyTDE4LjU2MyAxMi4yNDM1QzE4LjU1MDcgMTIuNTE5NCAxOC43NjQ0IDEyLjc1MjkgMTkuMDQwMyAxMi43NjUyQzE5LjMxNjIgMTIuNzc3NSAxOS41NDk4IDEyLjU2MzggMTkuNTYyIDEyLjI4NzlMMTkuODQzOCA1Ljk0ODY3VjUuOTM3NTZDMTkuODQzOCA1LjQ3Mzk1IDE5Ljk3NCA1LjAxMTYyIDIwLjIwNDQgNC42Nzk4MkMyMC4zMzY4IDQuNDg5MjMgMjAuNDk4IDQuMzQ1MTMgMjAuNjkwOCA0LjI1OTk4QzE5LjE2MzMgNC40Mjk5NSAxOC44OTA2IDUuMzkwNjkgMTguODkwNiA1LjM5MDY5TDE4Ljg5MDIgNS4zNjk1WiIgZmlsbD0iI0Q2QTA4OSIvPgo8cGF0aCBkPSJNMjMuMjYyOCA4LjA2NDkxQzIzLjE0MTIgOC40ODkwMyAyMy4wNjEgOC45OTczIDIzLjAzMTggOS42MDA5NEwyMy4wMzE3IDkuNjA0MTVMMjIuODU5OCAxMy43MTM1QzIyLjg0ODMgMTMuOTg5NCAyMy4wNjI2IDE0LjIyMjQgMjMuMzM4NSAxNC4yMzRDMjMuNjE0NCAxNC4yNDU1IDIzLjg0NzQgMTQuMDMxMiAyMy44NTg5IDEzLjc1NTNMMjQuMDMwOCA5LjY0NzU4QzI0LjA4MzEgOC41NjY4MyAyNC4zMTA3IDcuOTYyNDMgMjQuNTM3IDcuNjQxOTJDMjQuNzUyNiA3LjMzNjQ3IDI0Ljk2ODYgNy4yODEzIDI1LjA5MzggNy4yODEzVjcuMjY2MzZDMjQuMDU3MyA3LjI4OTEzIDIzLjQzODMgNy44NzM0MyAyMy4yNjI4IDguMDY0OTFaIiBmaWxsPSIjRDZBMDg5Ii8+CjxwYXRoIGQ9Ik0xMC41NTcxIDE2LjU2MjZDMTAuMzc3MiAxNi41NjYxIDEwLjIwMTUgMTYuNDcyMSAxMC4xMDg4IDE2LjMwMzVDOS42MTI2MSAxNS40MDE0IDguNDU0MDEgMTMuMzEzOSA3Ljg0NTgzIDEyLjM4MTVDNy45MjU5NiAxMi40MTcxIDguMDAzNTkgMTIuNDU2NiA4LjA3ODA3IDEyLjUwMDFDOC45NTQxOSAxMy4wMTA3IDkuOTg5MTYgMTQuNTczNiA5Ljk5MjIyIDE0LjU3ODJMOS42MzI4NCA3LjAyMzUxQzkuNDk0ODcgNS40ODcwMiAxMC40MDQ2IDQuNTQ5NjEgMTEuMzA1OSA0LjIzOTU2QzExLjEwOSA0LjM2Mzg4IDEwLjk1NzEgNC41NTU2NyAxMC44Mzk3IDQuODEzMDNDMTAuNjI0MyA1LjI4NTI1IDEwLjU0MDYgNS45NjA5OCAxMC41OTI2IDYuNzQ4MzhMMTAuNTkzMSA2Ljc1NjFMMTEuMDYxOCAxNi4wMzc0QzExLjA3NTcgMTYuMzEzMSAxMC44NjM1IDE2LjU0OCAxMC41ODc3IDE2LjU2MTlDMTAuNTc3NCAxNi41NjI1IDEwLjU2NzIgMTYuNTYyNyAxMC41NTcxIDE2LjU2MjZaIiBmaWxsPSIjRDZBMDg5Ii8+Cjwvc3ZnPgo=";
+function drawHand(x, y, rot, flip) {
+  const img = flip ? HAND_IMG.back : HAND_IMG.palm, size = 118;
+  if (!img.complete || !img.naturalWidth) return;
+  const c = cx; c.save(); c.translate(x, y); c.rotate(rot);
+  c.shadowColor = "rgba(20,24,40,.25)"; c.shadowBlur = 14; c.shadowOffsetY = 6;
+  c.drawImage(img, -size / 2, -size * 0.62, size, size);
+  c.restore();
+}
+function drawBubbles(hx, hy, t) {
+  const c = cx;
+  for (let i = 0; i < 12; i++) {
+    const a = i * 2.4 + t * (0.6 + (i % 3) * 0.25), r = 70 + (i % 4) * 18;
+    const bx = hx + Math.cos(a) * r, by = hy - 10 + Math.sin(a * 1.3) * r * 0.55, rad = 4 + (i % 4) * 2.5;
+    c.beginPath(); c.arc(bx, by, rad, 0, Math.PI * 2); c.fillStyle = "rgba(255,255,255,.55)"; c.fill();
+    c.strokeStyle = "rgba(150,200,230,.8)"; c.lineWidth = 1.2; c.stroke();
+  }
+}
+function drawCamera() {
+  const c = cx, now = S.now;
+  c.fillStyle = css("--wall"); c.fillRect(0, 0, W, H);
+  c.strokeStyle = css("--wall-line"); c.lineWidth = 1;
+  for (let x = 0; x < W; x += 60) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H * 0.55); c.stroke(); }
+  for (let y = 0; y < H * 0.55; y += 60) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
+  c.fillStyle = css("--sink"); c.fillRect(0, H * 0.55, W, H * 0.45);
+  c.fillStyle = css("--sink-in"); c.beginPath(); c.ellipse(W * 0.51, H * 0.8, W * 0.25, H * 0.15, 0, 0, Math.PI * 2); c.fill();
+  c.fillStyle = "#8b96a3"; c.fillRect(W * 0.5, H * 0.37, 16, 58); c.fillRect(W * 0.44, H * 0.35, 130, 16);
+  const iz = inZone(S.hand) && !S.drag;
+  if (iz) { c.fillStyle = "rgba(88,180,230,.35)"; c.fillRect(W * 0.505, H * 0.48, 8, H * 0.3); }
+  const z = C.ZONE; c.setLineDash([9, 6]); c.strokeStyle = iz ? "rgba(47,158,110,.95)" : "rgba(91,89,179,.9)"; c.lineWidth = 2.5;
+  c.strokeRect(z[0] * W, z[1] * H, (z[2] - z[0]) * W, (z[3] - z[1]) * H); c.setLineDash([]);
+  c.fillStyle = c.strokeStyle; c.font = "700 15px Inter, sans-serif"; c.fillText("Bồn rửa (HAND_ZONE)", z[0] * W + 8, z[1] * H + 20);
+  // hands: [separation, rotation, x-amplitude, y-amplitude] per WHO step
+  const hx = S.hand.x * W, hy = S.hand.y * H, rub = iz && S.step > 0, ph = rub ? Math.sin(now * Math.PI * 2) : 0, ph2 = rub ? Math.cos(now * Math.PI * 2) : 0;
+  const pose = { 0: [54, 0.12, 0, 0], 1: [26, 0.05, 4, 12], 2: [20, 0.45, 12, 6], 3: [24, 0.22, 12, 4], 4: [30, 1.0, 8, 6], 5: [32, 0.7, 8, 10], 6: [26, -0.2, 10, 12] }[iz ? S.step : 0];
+  drawHand(hx - pose[0] + ph * pose[2], hy + ph2 * pose[3], -pose[1], false);
+  drawHand(hx + pose[0] - ph * pose[2], hy - ph2 * pose[3], pose[1] + (iz && S.step === 6 ? 2.9 : 0), true);
+  if (rub) drawBubbles(hx, hy, now);
+  if (!iz && !S.feeder.washing && !S.demo) { c.fillStyle = "rgba(37,38,68,.75)"; c.font = "600 14px Inter, sans-serif"; c.textAlign = "center"; c.fillText("Kéo đôi tay vào bồn", hx, hy - 95); c.textAlign = "left"; }
+  // AI #1 box
+  if (S.gate.boxUntil > now && S.stream.up && iz) {
+    c.strokeStyle = "#e3b400"; c.lineWidth = 3; c.strokeRect(hx - 108, hy - 84, 216, 142);
+    c.fillStyle = "#e3b400"; c.fillRect(hx - 108, hy - 108, 160, 24); c.fillStyle = "#1b1c2c"; c.font = "700 14px JetBrains Mono, monospace";
+    c.fillText(`AI #1: tay ${S.gate.conf.toFixed(2)}`, hx - 101, hy - 91);
+  }
+  // HUD
+  c.fillStyle = "rgba(15,16,28,.6)"; c.fillRect(0, 0, W, 32);
+  c.fillStyle = "#fff"; c.font = "600 15px JetBrains Mono, monospace"; c.fillText(`Camera 1920×1080 · 25 hình/giây · hình #${S.stream.frame}`, 12, 22);
+  if (S.feeder.washing) { c.fillStyle = "#ef4444"; c.beginPath(); c.arc(W - 78, 16, 7, 0, Math.PI * 2); c.fill(); c.fillStyle = "#fff"; c.fillText("REC", W - 64, 22); }
+  if (iz && S.step > 0) { c.fillStyle = "rgba(15,16,28,.6)"; c.fillRect(0, H - 32, W, 32); c.fillStyle = "#fff"; c.fillText(`Người đang làm: B${S.step} · ${STEP_NAMES[S.step]}`, 12, H - 11); }
+  if (!S.stream.up) { c.fillStyle = "rgba(10,10,18,.88)"; c.fillRect(0, 0, W, H); c.fillStyle = "#fff"; c.font = "700 24px Inter, sans-serif"; c.textAlign = "center"; c.fillText("Mất tín hiệu camera · đang kết nối lại", W / 2, H / 2); c.textAlign = "left"; }
+}
+function toCanvas(e) { const r = cam.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }; }
+cam.addEventListener("pointerdown", e => {
+  const p = toCanvas(e), dx = (p.x - S.hand.x) * 16 / 9, dy = p.y - S.hand.y;
+  if (Math.hypot(dx, dy) < 0.28) { S.drag = { ox: S.hand.x - p.x, oy: S.hand.y - p.y }; S.demo = null; cam.setPointerCapture(e.pointerId); cam.classList.add("dragging"); }
+});
+cam.addEventListener("pointermove", e => { if (!S.drag) return; const p = toCanvas(e);
+  S.hand = { x: Math.min(0.95, Math.max(0.05, p.x + S.drag.ox)), y: Math.min(0.9, Math.max(0.2, p.y + S.drag.oy)) }; });
+const endDrag = () => { if (S.drag) { S.drag = null; cam.classList.remove("dragging"); renderPicker(); } };
+cam.addEventListener("pointerup", endDrag); cam.addEventListener("pointercancel", endDrag);
+
+// ---------------------------------------------------------------- step picker
+function renderPicker() {
+  const el = document.getElementById("picker"), iz = inZone(S.hand);
+  const opts = [[0, "Chỉ để tay, chưa chà"], ...[1, 2, 3, 4, 5, 6].map(s => [s, `B${s}`, STEP_NAMES[s]])];
+  el.innerHTML = opts.map(([s, a, b]) => `<button class="pick" data-pick="${s}" aria-pressed="${S.step === s}"><i style="background:var(--s${s})"></i>${a}${b ? ` <small>${b}</small>` : ""}</button>`).join("") +
+    `<button class="pick" data-hands="1">${iz ? "Rút tay ra" : "Đưa tay vào bồn"}</button>`;
+}
+document.getElementById("picker").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return; S.demo = null;
+  if (b.dataset.hands) { S.hand = inZone(S.hand) ? { ...HOME } : { x: 0.5, y: 0.66 }; if (!inZone(S.hand)) S.step = 0; }
+  else { S.step = +b.dataset.pick; if (!inZone(S.hand)) S.hand = { x: 0.5, y: 0.66 }; }
+  renderPicker();
+});
+
+// ---------------------------------------------------------------- pipeline cards
+const ICON = {
+  cam: '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg>',
+  gate: '<svg viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M9 15v-4.5a1 1 0 0 1 2 0V13m0-4a1 1 0 0 1 2 0v4m0-3a1 1 0 0 1 2 0v4c0 2-1.5 3-3.5 3S9 16 9 15"/></svg>',
+  stage: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M11 5v14M15 5v14M19 5v14"/></svg>',
+  count: '<svg viewBox="0 0 24 24"><path d="M5 5v14M9 5v14M13 5v14M17 5v14M3 15l18-6"/></svg>',
+  who: '<svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1.5 1.5L7.5 5M3.5 12l1.5 1.5L7.5 11M3.5 18l1.5 1.5L7.5 17"/></svg>',
+  save: '<svg viewBox="0 0 24 24"><path d="M7 18a4 4 0 0 1-.6-7.96A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9H7z"/><path d="M12 16v-6m-2.5 2.5L12 10l2.5 2.5"/></svg>',
+};
+const STAGES = [
+  { id: "cam", n: 1, t: "Camera", q: "Quay bồn rửa, giải nén từng hình", where: ["cpu", "edge · CPU"], steps: [1, 2] },
+  { id: "gate", n: 2, t: "Phát hiện tay", q: "Có tay trong bồn không?", where: ["gpu", "AI #1 · iGPU"], steps: [3, 4, 10] },
+  { id: "stage", n: 3, t: "Nhận diện bước", q: "Đang làm bước nào?", where: ["remote", "AI #2 · Triton"], steps: [5, 6, 8] },
+  { id: "count", n: 4, t: "Đếm số lần", q: "Mỗi bước chà mấy lần rồi?", where: ["remote", "AI #3 · Triton"], steps: [7] },
+  { id: "who", n: 5, t: "Chấm WHO", q: "Đạt hay chưa đạt?", where: ["cpu", "server · CPU"], steps: [11, 12] },
+  { id: "save", n: 6, t: "Lưu và gửi", q: "Lưu video, báo lên EHP", where: ["cpu", "MinIO · Kafka"], steps: [9, 13, 14, 15, 16] },
+];
+const LINKS = ["Hình 1920×1080<br>25 hình/giây", "Có tay: 24 hình<br>224×224 / lần", "Nhãn bước<br>từng hình", "Nhãn + số lần<br>mỗi bước", "Kết quả<br>+ video"];
+function buildPipe() {
+  document.getElementById("pipe").innerHTML = STAGES.map((s, i) => `<button class="stage" data-stage="${s.id}" id="st-${s.id}">
+    <span class="top"><span class="ico">${ICON[s.id]}</span><span class="num">0${s.n}</span></span>
+    <h3>${s.t}</h3><span class="q">${s.q}</span><span class="where ${s.where[0]}">${s.where[1]}</span>
+    <span class="out" id="out-${s.id}">—</span><span class="more">Xem chi tiết ›</span></button>` +
+    (i < LINKS.length ? `<div class="link" id="ln-${i}"><span class="lab">${LINKS[i]}</span><span class="line"><i class="dot"></i></span><span class="val" id="lv-${i}"></span></div>` : "")).join("");
+}
+function stageOut() {
+  const f = S.feeder, v = S.srv, sc = f.att ? f.att.sc : null, a = v.att, r = a ? (a.result || validate(a.labels, a.raw)) : null;
+  const last = a ? [...a.labels].reverse().find(x => x > 0) : 0;
+  const job = S.jobs.find(j => j.stages.some(x => x.state === "run" || x.state === "blocked")), jst = job && job.stages.find(x => x.state === "run" || x.state === "blocked");
+  const retry = S.scorers.find(x => x.retryCall);
+  return {
+    cam: [S.stream.up, S.stream.up ? `hình #${S.stream.frame}` : "mất tín hiệu"],
+    gate: [f.washing, S.gate.detected ? `có tay · ${S.gate.conf.toFixed(2)}` : "không thấy tay"],
+    stage: [!!sc && !sc.done, retry ? "Triton lỗi · thử lại" : last ? `B${last} · ${S.probs ? Math.round(Math.max(...S.probs) * 100) : 0}%` : sc && !sc.done ? "đang gom 24 hình" : "chờ"],
+    count: [!!sc && !sc.done, a && last ? `B${last}: ${a.raw[last - 1].toFixed(1)} lần` : "chờ"],
+    who: [v.state !== "idle", a && a.result ? (a.result.passed ? "ĐẠT" : "CHƯA ĐẠT") : r && a.labels.length ? `${r.present.size}/6 bước · ${r.total.toFixed(0)} s` : "chờ"],
+    save: [f.washing || !!jst, f.washing ? `ghi ${(f.att.rec.bytes / 1e6).toFixed(1)} MB` : jst ? (jst.state === "blocked" ? "chờ Triton" : `${jst.name}`) : S.jobs.length ? "đã gửi EHP" : "chờ"],
+  };
+}
+function linkState() {
+  const f = S.feeder, a = S.srv.att, sc = f.att ? f.att.sc : null;
+  const last = a ? [...a.labels].reverse().find(x => x > 0) : 0;
+  const n = a ? a.labels.length : 0;
+  return [
+    [S.stream.up && isActive("decode"), S.stream.up ? "đang truyền" : "mất tín hiệu"],
+    [isActive("sample"), f.washing ? `${sc ? sc.windows : 0} lần gửi` : "chờ có tay"],
+    [isActive("stage", 900), n ? `${n} nhãn · B${last || "–"}` : "—"],
+    [isActive("post", 900) || isActive("validator", 900), a && a.raw.some(x => x > 0) ? a.raw.map(x => Math.floor(x + 0.5)).join(" ") : "—"],
+    [isActive("result", 2500) || isActive("close", 2500) || f.washing, a && a.result ? (a.result.passed ? "đạt" : "chưa đạt") + (f.washing ? "" : " + video") : f.washing ? "đang ghi video" : "—"],
+  ];
+}
+function renderPipe() {
+  const o = stageOut();
+  for (const s of STAGES) { const [on, txt] = o[s.id], el = document.getElementById("out-" + s.id);
+    if (el.textContent !== txt) el.textContent = txt; document.getElementById("st-" + s.id).classList.toggle("on", on); }
+  linkState().forEach(([on, txt], i) => { document.getElementById("ln-" + i).classList.toggle("on", !!on); const v = document.getElementById("lv-" + i); if (v.textContent !== txt) v.textContent = txt; });
+}
+
+// ---------------------------------------------------------------- AI outputs
+const gv = document.getElementById("gview"), gvx = gv.getContext("2d");
+const film = document.getElementById("film"), fx = film.getContext("2d");
+const blk = document.getElementById("block"), bx = blk.getContext("2d");
+const filmBuf = document.createElement("canvas"); filmBuf.width = 24 * 56; filmBuf.height = 56;
+const fbx = filmBuf.getContext("2d");
+function fit(cv, h) { const dpr = window.devicePixelRatio || 1, w = cv.clientWidth; if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); } const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); return w; }
+function drawAIVisuals() {
+  // AI #1 input: letterbox 320x320 (here 150x150)
+  gvx.fillStyle = "rgb(114,114,114)"; gvx.fillRect(0, 0, 150, 150); gvx.drawImage(cam, 0, 33, 150, 84);
+  if (S.gate.boxUntil > S.now && inZone(S.hand)) { gvx.strokeStyle = "#e3b400"; gvx.lineWidth = 2; gvx.strokeRect(S.hand.x * 150 - 19, 33 + S.hand.y * 84 - 17, 38, 30); }
+  // AI #2 input: rolling film of the last 24 frames handed to the scorer
+  const sc = S.feeder.att ? S.feeder.att.sc : null;
+  if (sc && S.film.n !== sc.n) { S.film = { n: sc.n, total: 0 }; fbx.clearRect(0, 0, filmBuf.width, 56); }
+  if (sc) { const total = sc.t + sc.q.length, add = Math.min(24, total - S.film.total);
+    if (add > 0) { fbx.drawImage(filmBuf, -add * 56, 0); for (let i = 0; i < add; i++) fbx.drawImage(cam, 0, 0, W, H, (24 - add + i) * 56, 0, 56, 56); S.film.total = total; } }
+  const w = fit(film, 92), cw = w / 24;
+  fx.clearRect(0, 0, w, 92);
+  const total = S.film.total;
+  for (let i = 0; i < 24; i++) {
+    const fi = total - 24 + i, x = i * cw;
+    if (fi < 0 || !sc) { fx.fillStyle = css("--panel"); fx.fillRect(x + 1, 14, cw - 2, cw - 2 > 40 ? 40 : cw - 2); continue; }
+    const ih = Math.min(cw - 2, 46);
+    fx.drawImage(filmBuf, i * 56, 0, 56, 56, x + 1, 14, cw - 2, ih);
+    fx.fillStyle = fi < sc.emitted ? css("--s" + labelAt(sc.capT[fi])) : css("--line"); fx.fillRect(x + 1, 16 + ih, cw - 2, 8);
+  }
+  fx.fillStyle = css("--muted"); fx.font = "600 10.5px Inter, sans-serif";
+  fx.fillText(sc ? `hình ${Math.max(0, total - 24)}–${Math.max(0, total - 1)}` : "chưa có lần rửa", 0, 10);
+  if (sc && sc.pending && sc.pending.kind === "stage") { fx.textAlign = "right"; fx.fillStyle = css("--remote"); fx.fillText("đang gửi lên Triton…", w, 10); fx.textAlign = "left"; }
+  fx.fillStyle = css("--muted"); fx.fillText("cũ", 0, 88); fx.textAlign = "right"; fx.fillText("mới nhất", w, 88); fx.textAlign = "left";
+  // AI #3 input: the last counted block's 24 labels
+  const bw = fit(blk, 30), bcw = bw / 24; bx.clearRect(0, 0, bw, 30);
+  const lb = S.lastBlock;
+  for (let i = 0; i < 24; i++) { bx.fillStyle = lb ? css("--s" + lb.labels[i]) : css("--panel"); bx.fillRect(i * bcw + 1, 4, bcw - 2, 22); }
+}
+function renderAI() {
+  const sc = S.feeder.att ? S.feeder.att.sc : null, a = S.srv.att, iz = inZone(S.hand);
+  // AI #1
+  const det = S.gate.detected, conf = det ? S.gate.conf : (iz ? 0.3 : 0.05);
+  document.getElementById("o1").innerHTML = det ? `Có tay <small>độ tin cậy ${S.gate.conf.toFixed(2)} ≥ 0.70</small>` : `Không thấy tay <small>${S.stream.up ? "không có tay trong vùng bồn" : "mất tín hiệu camera"}</small>`;
+  document.getElementById("o1c").style.width = (conf * 100).toFixed(0) + "%";
+  document.getElementById("m1").textContent = (ui.gatedev === "GPU" ? "~25 ms" : "~150 ms (CPU)") + " · 4 lần/giây";
+  document.getElementById("f1").textContent = S.feeder.washing ? (det ? "Đang có tay → tiếp tục ghi video và gửi hình cho AI #2." : `Tay vắng ${(S.now - S.feeder.lastMotion).toFixed(1)} s. Đủ 3 s sẽ kết thúc lần rửa và chấm điểm.`)
+    : "Thấy tay trong vùng bồn → bắt đầu một lần rửa: ghi video và gửi hình cho AI #2. Vắng tay 3 giây → kết thúc.";
+  // AI #2
+  const pr = S.probs, top = pr ? pr.indexOf(Math.max(...pr)) : -1;
+  document.getElementById("o2").innerHTML = top > 0 ? `B${top} · ${(pr[top] * 100).toFixed(0)}%<small>${STEP_NAMES[top]}</small>` : top === 0 ? `Khác · ${(pr[0] * 100).toFixed(0)}%<small>tay trong bồn nhưng chưa chà bước nào</small>` : `Chưa có<small>chờ đủ 24 hình đầu tiên</small>`;
+  document.getElementById("probs").innerHTML = [0, 1, 2, 3, 4, 5, 6].map(k => { const v = pr ? pr[k] : 0;
+    return `<div class="bar ${k === top ? "top" : ""}"><span class="nm">${k ? "B" + k : "Khác"}</span><span class="tr"><span style="width:${(v * 100).toFixed(1)}%;background:var(--s${k})"></span></span><span class="v">${(v * 100).toFixed(0)}%</span></div>`; }).join("");
+  const c2 = S.calls.find(c => c.kind === "stage");
+  document.getElementById("m2").textContent = S.netDown ? "mất kết nối · thử lại" : c2 ? `${ui.triton} · ${(c2.rtt * 1000).toFixed(0)} ms · đã gọi ${sc ? sc.windows : 0} lần` : `${ui.triton} · chưa gọi`;
+  // AI #3
+  const lb = S.lastBlock, raw = a ? a.raw : [0, 0, 0, 0, 0, 0];
+  const di = lb ? lb.delta.indexOf(Math.max(...lb.delta)) : -1;
+  document.getElementById("o3").innerHTML = lb && lb.delta[di] > 0.05 ? `+${lb.delta[di].toFixed(1)} lần B${di + 1}<small>trong block hình ${lb.base}–${lb.base + 23}</small>` : lb ? `+0 lần<small>block hình ${lb.base}–${lb.base + 23} không có động tác chà</small>` : `Chưa có<small>chờ đủ block 24 hình có nhãn</small>`;
+  document.getElementById("counts").innerHTML = [1, 2, 3, 4, 5, 6].map(s => { const v = raw[s - 1], n = Math.floor(v + 0.5);
+    return `<div class="bar"><span class="nm">B${s}</span><span class="tr"><span style="width:${Math.min(100, v / 7 * 100)}%;background:var(--s${s})"></span><em style="left:${5 / 7 * 100}%"></em></span><span class="v">${n}/5</span></div>`; }).join("");
+  document.getElementById("m3").textContent = S.netDown ? "mất kết nối · thử lại" : lb ? `${ui.triton} · ${(lb.rtt * 1000).toFixed(0)} ms · ${sc ? sc.blocks : 0} block` : `${ui.triton} · chưa gọi`;
+  document.getElementById("i3").textContent = lb ? `Block hình ${lb.base}–${lb.base + 23} (không chồng nhau) cùng 24 nhãn bước từ AI #2.` : "Block 24 hình (0–23, 24–47, … không chồng nhau) cùng 24 nhãn bước từ AI #2.";
+  // WHO (under the kiosk)
+  const r = a ? (a.result || validate(a.labels, a.raw)) : null;
+  const chk = (ok, t, val) => `<div class="check ${ok ? "ok" : ""}"><span class="ic">${ok ? "✓" : "·"}</span><span>${t}</span><span class="val">${val}</span></div>`;
+  document.getElementById("checks").innerHTML = chk(r && !r.missing.length, "Đủ 6 bước", r ? `${r.present.size}/6` : "0/6") +
+    chk(r && !r.under.length, "Mỗi bước ≥ 5 lần", r ? `${6 - r.under.length}/6` : "0/6") + chk(r && r.rounded >= 30, "Tổng ≥ 30 giây", r ? `${r.total.toFixed(1)} s` : "0 s");
+  const vd = document.getElementById("verdict"), v = S.srv;
+  if (a && a.result) { vd.className = "verdict " + (a.result.passed ? "ok" : "bad"); vd.textContent = a.result.passed ? "ĐẠT chuẩn WHO" : "CHƯA ĐẠT"; }
+  else if (v.state === "washing") { vd.className = "verdict"; vd.textContent = "Đang rửa · chấm khi rút tay ra 3 s"; }
+  else if (v.state === "analyzing") { vd.className = "verdict"; vd.textContent = "Mạng lỗi · sẽ chấm lại từ video"; }
+  else { vd.className = "verdict"; vd.textContent = v.dropMsg && S.now - v.dropMsg.t < 8 ? "Không phải rửa tay thật · đã bỏ qua" : "Chưa có lần rửa"; }
+}
+
+// ---------------------------------------------------------------- sliding-window explainer
+const swc = document.getElementById("swc"), swx = swc.getContext("2d");
+const SWN = 72, SW = { stride: 12, k: 0, t0: performance.now(), playing: !matchMedia("(prefers-reduced-motion: reduce)").matches };
+const swStep = 1600;   // ms per window
+const swLabel = i => i < 30 ? 1 : i < 56 ? 2 : 3;   // example labels for the strip
+function swWindows() { const out = []; for (let b = 0; b + 24 <= SWN; b += SW.stride) out.push(b); return out; }
+function swAdvance() { const n = swWindows().length; SW.k = (SW.k + 1) % (n + 1); SW.t0 = performance.now(); }
+function drawSW(now) {
+  if (SW.playing && now - SW.t0 > swStep) swAdvance();
+  const w = fit(swc, 150), L = 6, cw = (w - L * 2) / SWN, c = swx;
+  c.clearRect(0, 0, w, 150);
+  const wins = swWindows(), k = Math.min(SW.k, wins.length);          // k windows sent so far (k = 0: nothing yet)
+  const prog = Math.min(1, (now - SW.t0) / 500);
+  const cur = k > 0 ? wins[k - 1] : -1, prev = k > 1 ? wins[k - 2] : -1;
+  const arrived = k === 0 ? Math.round(24 * prog) : Math.min(SWN, cur + 24);
+  const finalized = k === 0 ? 0 : k === wins.length ? cur + 24 : cur + SW.stride;
+  const y0 = 30, ch = 26;
+  // frames
+  for (let i = 0; i < SWN; i++) {
+    const x = L + i * cw;
+    if (i >= arrived) { c.strokeStyle = css("--line"); c.setLineDash([2, 2]); c.strokeRect(x + 0.5, y0 + 0.5, cw - 1.5, ch - 1); c.setLineDash([]); continue; }
+    let fill = css("--panel-2");
+    const inCur = cur >= 0 && i >= cur && i < cur + 24, inPrev = prev >= 0 && i >= prev && i < prev + 24;
+    c.fillStyle = fill; c.fillRect(x + 0.5, y0, cw - 1, ch);
+    if (inCur) { c.globalAlpha = inPrev ? 0.55 : 0.22; c.fillStyle = css("--accent"); c.fillRect(x + 0.5, y0, cw - 1, ch); c.globalAlpha = 1; }
+    // read count dots
+    const reads = wins.slice(0, k).filter(b => i >= b && i < b + 24).length;
+    c.fillStyle = css("--ink");
+    for (let r = 0; r < reads; r++) { c.beginPath(); c.arc(x + cw / 2, y0 + ch + 8 + r * 7, Math.min(2.6, cw / 4), 0, Math.PI * 2); c.fill(); }
+    // finalized label
+    if (i < finalized) { c.fillStyle = css("--s" + swLabel(i)); c.fillRect(x + 0.5, y0 + ch + 36, cw - 1, 7); }
+  }
+  // current window bracket
+  if (cur >= 0) {
+    const x1 = L + cur * cw, x2 = L + (cur + 24) * cw;
+    c.strokeStyle = css("--accent"); c.lineWidth = 2; c.strokeRect(x1 + 1, y0 - 2, x2 - x1 - 2, ch + 4);
+    c.fillStyle = css("--accent"); c.font = "700 11.5px Inter, sans-serif";
+    c.fillText(`Lần gửi ${k}: hình ${cur}–${cur + 23}`, Math.min(x1 + 2, w - 150), y0 - 8);
+  } else { c.fillStyle = css("--muted"); c.font = "600 11.5px Inter, sans-serif"; c.fillText("Camera đang đưa hình vào… chờ đủ 24 hình", L, y0 - 8); }
+  // frame numbers
+  c.fillStyle = css("--muted"); c.font = "500 10px JetBrains Mono, monospace";
+  for (let i = 0; i <= SWN; i += 12) { c.textAlign = i === SWN ? "right" : "left"; c.fillText(String(i), L + i * cw + (i === SWN ? 0 : 1), y0 + ch + 56); }
+  c.textAlign = "left";
+  // count blocks (AI #3): needs the stage clip that starts exactly at the block start
+  const yb = 118;
+  c.font = "700 11px Inter, sans-serif";
+  for (let B = 0; B + 24 <= SWN; B += 24) {
+    if (finalized < B + 24) break;
+    const ok = wins.slice(0, k).includes(B), x1 = L + B * cw, x2 = L + (B + 24) * cw;
+    c.fillStyle = ok ? css("--mint") : css("--bad"); c.globalAlpha = 0.85; c.fillRect(x1 + 1, yb, x2 - x1 - 2, 18); c.globalAlpha = 1;
+    c.fillStyle = "#fff"; c.fillText(ok ? `AI #3 đếm hình ${B}–${B + 23}` : `thiếu clip hình ${B}–${B + 23} → lỗi`, x1 + 6, yb + 13);
+  }
+  // caption
+  const capEl = document.getElementById("swcap"); let cap;
+  const overlap = 24 - SW.stride;
+  if (k === 0) cap = `Chưa gửi gì. AI #2 phải chờ đủ <b>24 hình</b> (≈ 1 giây) mới gửi lần đầu.`;
+  else if (k === 1) cap = `Lần gửi đầu: hình 0–23. Nhãn hình <b>0–${SW.stride - 1}</b> được chốt ngay; ${overlap > 0 ? `hình ${SW.stride}–23 chờ lần gửi sau để được đọc thêm lần nữa.` : "không có phần chồng."}`;
+  else cap = overlap > 0
+      ? `Lần gửi ${k}: hình <b>${cur}–${cur + 23}</b> = <b>${overlap} hình cũ</b> (${cur}–${prev + 23}) + <b>${SW.stride} hình mới</b>. Hình ${cur}–${prev + 23} đã được đọc ${SW.stride <= 8 ? "nhiều" : "2"} lần → lấy trung bình rồi chốt nhãn.`
+      : `Lần gửi ${k}: hình <b>${cur}–${cur + 23}</b>, toàn bộ là hình mới. Mỗi hình chỉ được đọc 1 lần; hình ở mép cửa sổ không được đọc lại.`;
+  if (SW.stride === 18) cap += ` <span class="err">Với STRIDE 18 không có cửa sổ nào bắt đầu ở hình 24 hay 48, nên AI #3 không có clip để đếm block đó → code báo RuntimeError.</span>`;
+  if (SW.stride === 6) cap += " Mỗi hình được đọc tới 4 lần: tốn gấp 4 so với không chồng.";
+  if (capEl.innerHTML !== cap) capEl.innerHTML = cap;
+}
+document.getElementById("swstride").addEventListener("change", e => { SW.stride = +e.target.value; SW.k = 0; SW.t0 = performance.now(); });
+document.getElementById("swplay").addEventListener("click", e => { SW.playing = !SW.playing; SW.t0 = performance.now(); e.target.textContent = SW.playing ? "Tạm dừng" : "Chạy tiếp"; });
+document.getElementById("swnext").addEventListener("click", () => { SW.playing = false; document.getElementById("swplay").textContent = "Chạy tiếp"; swAdvance(); SW.t0 = performance.now() - 600; });
+if (!SW.playing) document.getElementById("swplay").textContent = "Chạy tiếp";
+
+// ---------------------------------------------------------------- kiosk
+function renderKiosk() {
+  const v = S.srv, k = document.getElementById("kiosk"); let body = "";
+  if (v.state === "idle") {
+    body = `<div class="big">Mời bạn rửa tay</div><div class="sm">Đưa hai tay vào bồn rửa để bắt đầu.</div>`;
+    if (v.dropMsg && S.now - v.dropMsg.t < 8) body += `<div class="sm">Lần vừa rồi không có bước rửa nào nên đã bỏ qua, không lưu.</div>`;
+  } else if (v.state === "washing") {
+    const a = v.att, r = validate(a.labels, a.raw), last = [...a.labels].reverse().find(x => x > 0);
+    body = `<div class="sm">Đang thực hiện</div><div class="big">${last ? "B" + last + " · " + STEP_NAMES[last] : "Đang nhận diện…"}</div><div class="timer">${r.total.toFixed(1)} s</div>
+      <div class="ksteps">${[1, 2, 3, 4, 5, 6].map(s => `<div class="kstep ${r.counts[s] >= 5 ? "done" : s === last ? "act" : ""}"><b>B${s} · ${Math.min(r.counts[s], 9)}/5</b>${STEP_NAMES[s]}</div>`).join("")}</div>`;
+    if (v.popup) body += `<div class="kpop">Mạng chậm: đang chờ chấm điểm</div>`;
+  } else if (v.state === "analyzing") {
+    body = `<div class="spinner" aria-hidden="true"></div><div class="big">Đã ghi lại lần rửa</div><div class="sm">Mạng tới máy chấm điểm gặp sự cố. Video sẽ được chấm lại sau.</div>`;
+  } else {
+    const r = v.att.result;
+    body = r.passed ? `<div class="kres pass">✅ Đạt chuẩn WHO<div class="sm" style="font-weight:500;margin-top:4px">${r.rounded} s · đủ 6 bước, mỗi bước ≥ 5 lần</div></div>`
+      : `<div class="kres fail">⚠️ Chưa đạt chuẩn<ul>${r.reasons.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>`;
+    body += `<div class="sm">Về màn hình chờ sau ${Math.max(0, v.until - S.now).toFixed(0)} s. Rửa lại ngay sẽ được tính tiếp vào lần này.</div>`;
+  }
+  const html = `<div class="kbar"><span>Rửa tay WHO</span><span class="mono">${v.session ? v.session.id : ""}</span></div><div class="kbody">${body}</div>`;
+  if (k.innerHTML !== html) k.innerHTML = html;
+  document.getElementById("kcap").textContent = { idle: "chờ", washing: "đang rửa", analyzing: "đang xử lý", result: "kết quả" }[v.state];
+}
+function renderHint() {
+  const iz = inZone(S.hand), f = S.feeder, d = S.serialQ.find(j => j.kind === "finalize");
+  let t = "";
+  if (S.demo) t = "Đang chạy lần rửa mẫu (khoảng 40 s). Kéo tay hoặc chọn bước bất kỳ để tự điều khiển.";
+  else if (!iz) t = f.washing ? `Tay đã rời bồn ${(S.now - f.lastMotion).toFixed(1)} s. Sau 3 s hệ thống kết thúc và chấm điểm.` : "Kéo đôi tay vào khung bồn rửa, hoặc bấm “Đưa tay vào bồn”.";
+  else if (!S.feeder.washing) t = "AI #1 đang kiểm tra (4 lần/giây)…";
+  else if (S.step === 0) t = "Đã bắt đầu ghi. Chọn bước đang thực hiện; chà mỗi bước ≥ 5 lần (~5 s).";
+  else t = `Đang chà B${S.step}. Mỗi giây ≈ 1 lần. Kiosk cập nhật sau ~1 s vì AI cần đủ 24 hình.`;
+  if (d && !S.demo) t = `Đang chờ AI chấm xong phần còn lại (tối đa 60 s nếu mạng lỗi).`;
+  document.getElementById("hint").textContent = t;
+  document.getElementById("camcap").textContent = S.feeder.washing ? "đang ghi lần rửa" : "chờ";
+}
+
+// ---------------------------------------------------------------- advanced
+const METERS = [["decode", "Giải nén video"], ["gate", "Hand gate (CPU)"], ["resize", "Thu nhỏ 224"], ["record", "Ghi video"], ["render", "Video bằng chứng"], ["rescore", "Chấm lại"], ["other", "Python khác"]];
+function renderAdv() {
+  if (!document.querySelector("details.adv").open) return;
+  document.getElementById("meters").innerHTML = METERS.map(([k, n]) => { const v = S.cpu[k] || 0;
+    return `<div class="meter"><span>${n}</span><span class="tr"><span style="width:${Math.min(100, v)}%;background:var(--cpu)"></span></span><span class="v">${v.toFixed(v < 10 ? 1 : 0)}%</span></div>`; }).join("") +
+    `<div class="meter"><span>Hand gate (iGPU)</span><span class="tr"><span style="width:${S.gpu}%;background:var(--gpu)"></span></span><span class="v">${S.gpu}%</span></div>`;
+  document.getElementById("cputot").textContent = `Tổng ${(Object.values(S.cpu).reduce((a, b) => a + b, 0) / 100).toFixed(2)} core. Ghi video 1080p tốn nhiều nhất khi đang rửa; chọn "Copy luồng H.264" để so sánh.`;
+  document.getElementById("log").innerHTML = S.log.slice(0, 30).map(e => { const p = { ...e.p }; delete p.type; delete p.cam_name;
+    if (p.step_ids) p.step_ids = `[${p.step_ids.slice(0, 6).join(",")}${p.step_ids.length > 6 ? ", …" : ""}] (${e.p.step_ids.length})`;
+    return `<div><span class="t">${e.t.toFixed(1)}s</span><b>${e.p.type}</b> ${esc(JSON.stringify(p))}</div>`; }).join("");
+}
+
+// ---------------------------------------------------------------- drawer
+let dState = null;
+function openDrawer(stageId, stepId) {
+  const st = STAGES.find(s => s.id === stageId); dState = { st, step: stepId || st.steps[0] };
+  document.getElementById("dkicker").textContent = `Khối 0${st.n} · ${st.where[1]}`;
+  document.getElementById("dtitle").textContent = st.t;
+  document.getElementById("scrim").hidden = false; document.getElementById("drawer").hidden = false;
+  renderDrawer(); document.getElementById("dclose").focus();
+}
+function closeDrawer() { dState = null; document.getElementById("scrim").hidden = true; document.getElementById("drawer").hidden = true; }
+function renderDrawer() {
+  const { st, step } = dState, d = STEPS.find(x => x.id === step);
+  document.getElementById("dtabs").innerHTML = st.steps.map(id => { const x = STEPS.find(y => y.id === id);
+    return `<button class="dtab" role="tab" data-dstep="${id}" aria-selected="${id === step}">${x.t}</button>`; }).join("");
+  document.getElementById("dbody").innerHTML = `
+    <h3>${d.t}</h3><p class="what">${d.what}</p>
+    <div class="dsect">Ngay lúc này</div><div class="live" id="dlive"></div>
+    <div class="dsect">Cách làm</div><ol>${d.how.map(h => `<li>${esc(h)}</li>`).join("")}</ol>
+    <div class="dsect">Vào → ra</div>
+    <dl class="io"><dt>Vào</dt><dd>${esc(d.io[0])}</dd><dt>Ra</dt><dd>${esc(d.io[1])}</dd><dt>Chạy trên</dt><dd>${esc(d.hw[1])}</dd><dt>Cấu hình</dt><dd class="mono" style="font-size:12px">${esc(d.cfg)}</dd></dl>
+    <details class="code"><summary>Xem code thật · ${esc(d.ref)}</summary><pre>${esc(d.code)}</pre></details>`;
+  renderDrawerLive();
+}
+function renderDrawerLive() { if (!dState) return; const el = document.getElementById("dlive"), d = STEPS.find(x => x.id === dState.step); if (el) el.innerHTML = d.live(); }
+document.addEventListener("click", e => { const b = e.target.closest("[data-stage],[data-open]"); if (b) openDrawer(b.dataset.stage || b.dataset.open); });
+document.getElementById("dtabs").addEventListener("click", e => { const b = e.target.closest("[data-dstep]"); if (b) { dState.step = +b.dataset.dstep; renderDrawer(); } });
+document.getElementById("dclose").addEventListener("click", closeDrawer);
+document.getElementById("scrim").addEventListener("click", closeDrawer);
+document.addEventListener("keydown", e => { if (e.key === "Escape" && dState) closeDrawer(); });
+
+// ---------------------------------------------------------------- controls + loop
+document.getElementById("demo").addEventListener("click", () => { reset(); S.demo = { t0: S.now, i: 0, anim: null }; });
+document.getElementById("reset").addEventListener("click", reset);
+document.getElementById("recmode").addEventListener("change", e => { ui.recmode = e.target.value; S.rec = REC[ui.recmode]; });
+document.getElementById("triton").addEventListener("change", e => { ui.triton = e.target.value; });
+document.getElementById("gatedev").addEventListener("change", e => { ui.gatedev = e.target.value; });
+document.getElementById("netdown").addEventListener("change", e => { S.netDown = e.target.checked; });
+document.getElementById("camdown").addEventListener("change", e => { S.camDown = e.target.checked; });
+let last = performance.now(), acc = 0, lastDom = 0, lastColors = 0;
+function frame(t) {
+  const dt = Math.min(0.1, (t - last) / 1000); last = t;
+  if (t - lastColors > 1000) { colorCache = {}; lastColors = t; }
+  acc += dt; let n = 0; while (acc >= DT && n < 10) { step(); acc -= DT; n++; }
+  drawCamera(); drawAIVisuals(); drawSW(t);
+  if (t - lastDom > 150) { lastDom = t; renderKiosk(); renderPipe(); renderAI(); renderHint(); renderAdv(); renderDrawerLive(); }
+  requestAnimationFrame(frame);
+}
+buildPipe(); reset(); requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>

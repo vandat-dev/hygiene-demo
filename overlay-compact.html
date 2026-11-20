@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hand Wash Compact</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap&subset=vietnamese">
+<style>
+  /* Single dark look on purpose: everything sits on top of camera video.
+     Overlay palette: clinical navy (#0D1B2A/#415A77/#778DA9/#E0E6ED, "Medical Devices UI")
+     + cyan #4DD0E1 for in-progress ("Digital Health Dashboard"); green/red stay semantic. */
+  :root {
+    color-scheme: dark;
+    --bg: #0b0e11; --glass: rgba(13,27,42,.74); --line: rgba(119,141,169,.28);
+    --ink: #e0e6ed; --mute: #9fb0c6; --idle: #415a77;
+    --live: #4dd0e1; --ok: #4fd08a; --bad: #f2706b;
+    --sans: "Be Vietnam Pro", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  body { margin: 0; padding: 24px 16px; background: var(--bg); color: var(--ink); font-family: var(--sans); }
+  .wrap { max-width: 1200px; margin: 0 auto; display: grid; gap: 10px; }
+  #err { color: var(--bad); margin: 0; }
+  #err:empty { display: none; }
+
+  .player { position: relative; background: #000; border-radius: 10px; overflow: hidden; container-type: inline-size; }
+  .player video { display: block; width: 100%; }
+  .player:fullscreen { display: flex; align-items: center; border-radius: 0; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* ── HUD: fixed size so nothing shifts while counts change ── */
+  .hud { position: absolute; top: 1.6cqw; left: 1.6cqw; width: 34cqw; box-sizing: border-box; padding: 1.2cqw 1.3cqw;
+         display: grid; gap: .9cqw; background: var(--glass); backdrop-filter: blur(14px) saturate(140%);
+         border: 1px solid var(--line); border-radius: .9cqw; pointer-events: none; font-size: 1.15cqw; }
+  .head { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 1cqw; }
+  .state { display: flex; align-items: center; gap: .5cqw; color: var(--mute); font-size: .95cqw;
+           text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
+  .dot { width: .6cqw; height: .6cqw; border-radius: 50%; background: var(--idle); }
+  .hud.is-live .dot { background: var(--live); animation: pulse 1.2s ease-in-out infinite; }
+  .hud.is-live .state { color: var(--live); }
+  .step-name { font-size: 1.5cqw; font-weight: 600; margin-top: .25cqw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .timer { text-align: right; line-height: 1; }
+  .timer b { font-size: 2.4cqw; }
+  .timer span { color: var(--mute); font-size: 1cqw; }
+  .meter { height: .3cqw; background: var(--line); border-radius: 1cqw; overflow: hidden; }
+  .meter i { display: block; height: 100%; background: var(--mute); transition: width .25s linear; }
+  .meter.full i { background: var(--ok); }
+
+  .tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: .5cqw; }
+  .tile { display: grid; gap: .35cqw; padding: .6cqw .5cqw; border-radius: .5cqw; background: rgba(255,255,255,.04);
+          border: 1px solid transparent; text-align: center; }
+  .tile .code { font-weight: 700; font-size: 1.05cqw; color: var(--mute); }
+  .tile .val { font-size: 1.3cqw; font-weight: 700; color: var(--idle); }
+  .tile .bar { height: .25cqw; background: var(--line); border-radius: 1cqw; overflow: hidden; }
+  .tile .bar i { display: block; height: 100%; background: currentColor; }
+  .tile.live { border-color: var(--live); color: var(--live); }
+  .tile.ok  { color: var(--ok); }
+  .tile.bad { color: var(--bad); }
+  .tile.live .code, .tile.live .val, .tile.ok .val, .tile.bad .val { color: inherit; }
+
+  /* ── End-of-session card ── */
+  .scrim { position: absolute; inset: 0; background: rgba(13,27,42,.45); opacity: 0; transition: opacity .4s; pointer-events: none; }
+  .card { position: absolute; top: 50%; left: 50%; width: 38cqw; box-sizing: border-box; padding: 2cqw;
+          transform: translate(-50%, -46%); opacity: 0; transition: opacity .4s, transform .4s; pointer-events: none;
+          display: grid; gap: 1.3cqw; background: var(--glass); backdrop-filter: blur(16px) saturate(140%);
+          border: 1px solid var(--line); border-radius: 1.2cqw; font-size: 1.2cqw; }
+  .show .scrim { opacity: 1; }
+  .show .card  { opacity: 1; transform: translate(-50%, -50%); }
+  .card .top { display: flex; justify-content: space-between; align-items: center; gap: 1cqw; }
+  .card .label { color: var(--mute); font-size: .95cqw; text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
+  .verdict { font-size: 2.4cqw; font-weight: 700; letter-spacing: .02em; text-wrap: balance; }
+  .verdict.bad { color: var(--bad); } .verdict.ok { color: var(--ok); }
+  .score { text-align: right; }
+  .score b { font-size: 2.4cqw; }
+  .meta { color: var(--mute); display: flex; flex-wrap: wrap; gap: .4cqw 1.2cqw; }
+  .meta .num { color: var(--ink); }
+  .seq { display: flex; flex-wrap: wrap; align-items: center; gap: .4cqw; }
+  .chip { padding: .2cqw .6cqw; border-radius: .4cqw; font-weight: 700; font-size: 1cqw; background: rgba(255,255,255,.06); }
+  .chip.ok { color: var(--ok); } .chip.bad { color: var(--bad); }
+  .seq .arrow { color: var(--idle); }
+  .reasons { margin: 0; padding: 0; list-style: none; display: grid; gap: .55cqw; }
+  .reasons li { display: grid; grid-template-columns: 1.2cqw 1fr; gap: .4cqw; }
+  .reasons li::before { content: ""; width: .5cqw; height: .5cqw; margin-top: .55cqw; border-radius: 50%; background: var(--bad); }
+
+
+  @keyframes pulse { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) {
+    .hud.is-live .dot { animation: none; }
+    .scrim, .card, .meter i { transition: none; }
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <p id="err"></p>
+  <div class="player" id="player">
+    <video id="video" controls controlslist="nofullscreen"></video>
+    <div class="hud" id="hud"></div>
+    <div class="scrim"></div>
+    <div class="card" id="card"></div>
+  </div>
+</main>
+
+<script>
+const LABEL = {
+  B1: 'Chà hai lòng bàn tay',   B2: 'Chà mu bàn tay & kẽ ngón', B3: 'Chà kẽ trong ngón tay',
+  B4: 'Chà mặt ngoài ngón tay', B5: 'Chà ngón tay cái',          B6: 'Chà đầu ngón tay',
+};
+const SUMMARY_LEAD_SEC = 1.4;
+const TZ = 'Asia/Ho_Chi_Minh';
+
+const $ = id => document.getElementById(id);
+const video = $('video');
+// ?name=attempt_1_violation → loads attempt_1_violation.mp4 + .json (default: attempt_1_violation)
+const NAME = new URLSearchParams(location.search).get('name') || 'attempt_1_violation';
+video.src = NAME + '.mp4';
+let data;
+
+function parse(text) {
+  let v;
+  try { v = JSON.parse(text); } catch { v = JSON.parse(text.replace(/\\"/g, '"')); }
+  return typeof v === 'string' ? JSON.parse(v) : v;
+}
+
+const minCount = d => d.violations?.find(v => v.minCount)?.minCount ?? 5;
+const minDur = d => d.violations?.find(v => v.type === 'TOO_SHORT')?.minDurationSecond ?? 30;
+const steps = d => d.stepTimeline.filter(x => x.stepCode !== 'OTHER');
+
+function rows(d, t, ended) {
+  const min = minCount(d);
+  return d.stepHandWash.map(s => {
+    const all = d.stepTimeline.filter(x => x.stepCode === s.step_code);
+    const segs = all.filter(x => x.startSec <= t);
+    const live = segs.some(x => t < x.endSec);
+    // ponytail: live count interpolated by time in step; exact needs per-rub timestamps from BE
+    const total = all.reduce((a, x) => a + x.endSec - x.startSec, 0);
+    const spent = segs.reduce((a, x) => a + Math.min(t, x.endSec) - x.startSec, 0);
+    const c = total ? Math.floor(s.count * spent / total) : s.count;
+    const cls = live ? 'live' : segs.length === 0 ? '' : (ended ? !s.violation : c >= min) ? 'ok' : 'bad';
+    return { code: s.step_code, c, min, cls };
+  });
+}
+
+function renderHud(t) {
+  const st = steps(data);
+  const first = st[0]?.startSec ?? 0, last = st.at(-1)?.endSec ?? 0;
+  const ended = t >= last;
+  const rs = rows(data, t, ended);
+  const live = rs.find(r => r.cls === 'live');
+  const dur = Math.floor(Math.max(0, Math.min(t, last) - first));
+  const need = minDur(data);
+  const state = ended ? 'Phiên đã kết thúc' : live ? 'Đang thực hiện' : 'Chờ nhận diện';
+  const name = live ? `${live.code} · ${LABEL[live.code]}` : ended ? 'Xem bảng tổng kết' : 'Đưa tay vào vùng camera';
+  $('hud').className = 'hud' + (live ? ' is-live' : '');
+  $('hud').innerHTML = `
+    <div class="head">
+      <div><div class="state"><span class="dot"></span>${state}</div><div class="step-name">${name}</div></div>
+      <div class="timer num"><b>${String(dur).padStart(2, '0')}</b><span>s / ${need}s</span></div>
+    </div>
+    <div class="meter ${dur >= need ? 'full' : ''}"><i style="width:${Math.min(dur / need, 1) * 100}%"></i></div>
+    <div class="tiles">${rs.map(r => `
+      <div class="tile ${r.cls}">
+        <span class="code">${r.code}</span>
+        <span class="val num">${r.cls === '' ? '—' : r.cls === 'live' && r.c < r.min ? `${r.c}/${r.min}` : r.c}</span>
+        <span class="bar"><i style="width:${Math.min(r.c / r.min, 1) * 100}%"></i></span>
+      </div>`).join('')}
+    </div>`;
+}
+
+function renderCard() {
+  const d = data, min = minCount(d);
+  const time = iso => new Date(iso).toLocaleTimeString('vi-VN', { timeZone: TZ, hour12: false });
+  const date = new Date(d.eventStartTime).toLocaleDateString('vi-VN', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' });
+  const short = d.violations.find(v => v.type === 'TOO_SHORT');
+  const dur = Math.round((new Date(d.eventEndTime) - new Date(d.eventStartTime)) / 1000);
+  const status = Object.fromEntries(d.stepHandWash.map(s => [s.step_code, s.violation ? 'bad' : 'ok']));
+  const seq = d.stepSequence.filter((s, i, a) => s !== a[i - 1]).map(s => 'B' + s);
+  const passed = d.stepHandWash.filter(s => !s.violation).length;
+  const name = s => s.step_code;
+  const missing = d.stepHandWash.filter(s => s.count === 0);
+  const under = d.stepHandWash.filter(s => s.count > 0 && s.count < min);
+  const reasons = [
+    missing.length && `Thiếu bước ${missing.map(name).join(', ')}`,
+    under.length && `${under.map(name).join(', ')} chưa đủ ${min} lần`,
+    d.outOfOrderSteps?.length && `Sai trình tự: ${d.outOfOrderSteps.join(', ')}`,
+    short && `Rửa ${dur} giây, cần tối thiểu ${short.minDurationSecond} giây`,
+  ].filter(Boolean);
+  const bad = d.violationHandWash;
+  $('card').innerHTML = `
+    <div class="top">
+      <div><div class="label">Kết quả</div><div class="verdict ${bad ? 'bad' : 'ok'}">${bad ? 'Vi phạm' : 'Đạt chuẩn'}</div></div>
+      <div class="score"><div class="label">Bước đạt</div><b class="num">${passed}</b><span class="num"> / ${d.stepHandWash.length}</span></div>
+    </div>
+    <div class="meta">
+      <span><span class="num">${time(d.eventStartTime)} – ${time(d.eventEndTime)}</span> · ${date}</span>
+      <span>Thời lượng <span class="num" style="color:var(${short ? '--bad' : '--ink'})">${dur}s</span></span>
+    </div>
+    <div class="seq">${seq.map(c => `<span class="chip ${status[c]}">${c}</span>`).join('<span class="arrow">→</span>') || '—'}</div>
+    ${reasons.length ? `<ul class="reasons">${reasons.map(r => `<li>${r}</li>`).join('')}</ul>` : ''}`;
+}
+
+function render() {
+  if (!data) return;
+  const t = video.currentTime;
+  renderHud(t);
+  const end = video.duration || data.timelineDurationSecond;
+  $('player').classList.toggle('show', t >= end - SUMMARY_LEAD_SEC || video.ended);
+}
+
+$('player').addEventListener('dblclick', () =>
+  document.fullscreenElement ? document.exitFullscreen() : $('player').requestFullscreen().catch(() => {}));
+for (const ev of ['timeupdate', 'seeked', 'loadedmetadata']) video.addEventListener(ev, render);
+
+// fetch() is blocked on file:// — serve the folder (python3 -m http.server)
+fetch(NAME + '.json').then(r => r.text())
+  .then(text => { data = parse(text); renderCard(); render(); })
+  .catch(e => { $('err').textContent = `Không tải được ${NAME}.json (${e.message}). Hãy chạy: python3 -m http.server`; });
+</script>
+</body>
+</html>

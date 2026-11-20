@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hand Wash Overlay</title>
+<!-- Web font with full Vietnamese glyphs; local DejaVu Sans Mono lacks ầ/ắ/ế… so Chrome stacks the marks badly -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Mono:wght@400;700&display=swap&subset=vietnamese">
+<style>
+  body { margin: 0; padding: 16px; background: #111; color: #ddd; font-family: system-ui, sans-serif; }
+  #err { color: #ff6b5b; }
+  #err:empty { display: none; }
+
+  .player { position: relative; max-width: 1200px; background: #000; container-type: inline-size;
+            --yel: #f6c344; --grn: #5ee08a; --red: #f87171; --dim: #bdbdbd; }
+  .player video { display: block; width: 100%; }
+  .player:fullscreen { display: flex; align-items: center; }
+
+  /* All sizes in cqw (1cqw = 1% of player width), measured from the 1920px reference video,
+     so the overlay keeps the same geometry at any player size. */
+  .hud, .sum { font-family: "Noto Sans Mono", "DejaVu Sans Mono", ui-monospace, Menlo, Consolas, monospace; pointer-events: none; }
+
+  /* Fixed-size panel: width/height never depend on the text inside → no jumping */
+  .hud { position: absolute; top: 0; left: 0; width: 41cqw; height: 20.8cqw; box-sizing: border-box;
+         padding: 1.4cqw 1.56cqw 0; background: rgba(0,0,0,.6); color: var(--dim); }
+  .hud .title { font-size: 1.52cqw; line-height: 2.1cqw; white-space: nowrap; }
+  .hud .title.live { color: var(--yel); font-weight: 700; }
+  .hud .dur { font-size: 1.29cqw; line-height: 2.1cqw; color: #f0f0f0; }
+  .hud .rows { margin-top: .6cqw; }
+  .hud .row { display: grid; grid-template-columns: 1.6cqw 1fr auto; font-size: 1.15cqw; line-height: 2.19cqw;
+              white-space: nowrap; }
+  .hud .row .st { font-weight: 700; text-align: right; }
+  .row.live { color: var(--yel); } .row.ok { color: var(--grn); } .row.bad { color: var(--red); }
+
+  /* End-of-session summary */
+  .dimmer { position: absolute; inset: 0; background: rgba(0,0,0,.45); opacity: 0; transition: opacity .4s; pointer-events: none; }
+  .sum { position: absolute; top: 4.7cqw; left: 50%; transform: translateX(-50%); width: 46.9cqw; min-height: 46.9cqw;
+         box-sizing: border-box; padding: 1.4cqw 1.9cqw; background: rgba(16,18,22,.92); border: 1px solid #333;
+         border-radius: .6cqw; color: #e8e8e8; font-size: 1.15cqw; line-height: 1.77cqw;
+         opacity: 0; transition: opacity .4s; }
+  .show .dimmer, .show .sum { opacity: 1; }
+  .sum h2 { margin: 0; font-size: 1.25cqw; text-align: center; letter-spacing: .1em; }
+  .sum hr { border: 0; border-top: 1px solid #444; margin: .7cqw 0; }
+  .sum .kv { display: grid; grid-template-columns: 17.7cqw 1fr; }
+  .sum .kv span:nth-child(odd), .sum .cap { color: #9a9a9a; }
+  .sum .steps div { display: flex; justify-content: space-between; }
+  .sum .steps b, .sum .red, .sum .kv .green { font-weight: 700; }
+  .sum .green { color: var(--grn); } .sum .red { color: var(--red); }
+  .sum .verdict { font-size: 1.8cqw; line-height: 2.6cqw; font-weight: 700; letter-spacing: .12em; }
+  .sum ul { list-style: none; margin: 0; padding: 0; }
+  .sum li { color: var(--red); font-weight: 700; margin-bottom: 1cqw; }
+  .sum li::before { content: "• "; }
+</style>
+</head>
+<body>
+
+<p id="err"></p>
+
+<div class="player" id="player">
+  <video id="video" controls controlslist="nofullscreen"></video>
+  <div class="hud" id="hud"></div>
+  <div class="dimmer"></div>
+  <div class="sum" id="sum"></div>
+</div>
+
+<script>
+const LABEL = {
+  B1: 'Chà hai lòng bàn tay',   B2: 'Chà mu bàn tay & kẽ ngón', B3: 'Chà kẽ trong ngón tay',
+  B4: 'Chà mặt ngoài ngón tay', B5: 'Chà ngón tay cái',          B6: 'Chà đầu ngón tay',
+};
+const SUMMARY_LEAD_SEC = 1.4;   // summary fades in this long before the video ends (matches reference)
+const TZ = 'Asia/Ho_Chi_Minh';
+
+
+const $ = id => document.getElementById(id);
+const video = $('video');
+// ?name=attempt_1_violation → loads attempt_1_violation.mp4 + .json (default: attempt_1_violation)
+const NAME = new URLSearchParams(location.search).get('name') || 'attempt_1_violation';
+video.src = NAME + '.mp4';
+let data;
+
+// Accepts plain JSON, a JSON string containing JSON, or text with escaped quotes (\")
+function parse(text) {
+  let v;
+  try { v = JSON.parse(text); } catch { v = JSON.parse(text.replace(/\\"/g, '"')); }
+  return typeof v === 'string' ? JSON.parse(v) : v;
+}
+
+// minCount only comes back inside UNDER_COUNT violations; fall back to 5
+const minCount = d => d.violations?.find(v => v.minCount)?.minCount ?? 5;
+const steps = d => d.stepTimeline.filter(x => x.stepCode !== 'OTHER');
+
+function rows(d, t, ended) {
+  const min = minCount(d);
+  return d.stepHandWash.map(s => {
+    const all = d.stepTimeline.filter(x => x.stepCode === s.step_code);
+    const segs = all.filter(x => x.startSec <= t);
+    const live = segs.some(x => t < x.endSec);
+    // ponytail: JSON only has the total count per step, so the live count is interpolated
+    // by time spent in the step; exact counting needs per-rub timestamps from BE
+    const total = all.reduce((a, x) => a + x.endSec - x.startSec, 0);
+    const spent = segs.reduce((a, x) => a + Math.min(t, x.endSec) - x.startSec, 0);
+    const c = total ? Math.floor(s.count * spent / total) : s.count;
+    const pass = ended ? !s.violation : c >= min;
+    let st, cls;
+    if (live)                   { st = `Đang thực hiện (${c < min ? `${c}/${min}` : `${c} lần`})`; cls = 'live'; }
+    else if (segs.length === 0) { st = 'Chưa thực hiện';                                         cls = ''; }
+    else if (pass)              { st = `Đạt (${c} lần)`;                                         cls = 'ok'; }
+    else                        { st = `Không đạt (${c} lần)`;                                   cls = 'bad'; }
+    return { code: s.step_code, label: LABEL[s.step_code] ?? s.step_code, st, cls };
+  });
+}
+
+function renderHud(t) {
+  const st = steps(data);
+  const first = st[0]?.startSec ?? 0, last = st.at(-1)?.endSec ?? 0;
+  const ended = t >= last;
+  const rs = rows(data, t, ended);
+  const live = rs.find(r => r.cls === 'live');
+  const title = ended ? 'Phiên đã kết thúc' : live ? `Đang thực hiện: ${live.code}` : 'Chờ nhận diện bước rửa tay…';
+  const dur = Math.floor(Math.max(0, Math.min(t, last) - first));
+  const box = { live: '■', ok: '☑', bad: '⊠', '': '☐' };
+  $('hud').innerHTML = `
+    <div class="title ${live ? 'live' : ''}">${title}</div>
+    <div class="dur">Thời lượng phiên: <b>${dur} giây</b></div>
+    <div class="rows">${rs.map(r => `
+      <div class="row ${r.cls}"><span>${box[r.cls]}</span><span>${r.code} ${r.label}</span><span class="st">${r.st}</span></div>`).join('')}
+    </div>`;
+}
+
+function renderSummary() {
+  const d = data, min = minCount(d);
+  const fmt = iso => {
+    const x = new Date(iso);
+    return x.toLocaleTimeString('vi-VN', { timeZone: TZ, hour12: false }) + ' · ' +
+           x.toLocaleDateString('vi-VN', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+  const short = d.violations.find(v => v.type === 'TOO_SHORT');
+  const dur = Math.round((new Date(d.eventEndTime) - new Date(d.eventStartTime)) / 1000);
+  const seq = d.stepSequence.filter((s, i, a) => s !== a[i - 1]).map(s => 'B' + s).join(' → ') || '—';
+  const name = s => 'Bước ' + s.step_code.slice(1);
+  const missing = d.stepHandWash.filter(s => s.count === 0);
+  const under = d.stepHandWash.filter(s => s.count > 0 && s.count < min);
+  const reasons = [
+    missing.length && `Thiếu ${missing.map(name).join(', ')}`,
+    under.length && `${under.map(name).join(', ')} chưa đủ số lần tối thiểu (< ${min} lần)`,
+    d.outOfOrderSteps?.length && `Sai trình tự: ${d.outOfOrderSteps.join(', ')}`,
+    short && `Thời lượng phiên dưới ${short.minDurationSecond} giây (< ${short.minDurationSecond} giây)`,
+  ].filter(Boolean);
+  const res = s => s.count === 0 ? ['red', 'Không ghi nhận']
+                 : s.violation ? ['red', `Không đạt (${s.count} lần)`] : ['green', `Đạt (${s.count} lần)`];
+  $('sum').innerHTML = `
+    <h2>TỔNG KẾT TUÂN THỦ RỬA TAY THƯỜNG QUY</h2><hr>
+    <div class="kv">
+      <span>Thời điểm bắt đầu</span><span>${fmt(d.eventStartTime)}</span>
+      <span>Thời điểm kết thúc</span><span>${fmt(d.eventEndTime)}</span>
+      <span>Thời lượng phiên</span><span class="${short ? 'red' : 'green'}">${dur} giây</span>
+      <span>Trình tự ghi nhận</span><span>${seq}</span>
+    </div><hr>
+    <div class="cap">Kết quả từng bước</div>
+    <div class="steps">${d.stepHandWash.map(s => { const [c, txt] = res(s);
+      return `<div><span>${s.step_code} ${LABEL[s.step_code] ?? ''}</span><b class="${c}">${txt}</b></div>`; }).join('')}
+    </div><hr>
+    <div class="cap">Kết quả đánh giá tuân thủ</div>
+    <div class="verdict ${d.violationHandWash ? 'red' : 'green'}">${d.violationHandWash ? 'VI PHẠM' : 'TUÂN THỦ'}</div>
+    <div class="cap">Nguyên nhân vi phạm</div>
+    ${reasons.length ? `<ul>${reasons.map(r => `<li>${r}</li>`).join('')}</ul>`
+                     : '<div class="green">Không có - phiên đạt đầy đủ điều kiện</div>'}`;
+}
+
+function render() {
+  if (!data) return;   // JSON not loaded yet
+  const t = video.src ? video.currentTime : Infinity;   // no video → show final state
+  renderHud(t);
+  const end = video.duration || data.timelineDurationSecond;
+  $('player').classList.toggle('show', t >= end - SUMMARY_LEAD_SEC || video.ended);
+}
+
+function load() { renderSummary(); render(); }
+
+// Double-click → fullscreen the wrapper, not the <video>, otherwise the overlay disappears
+$('player').addEventListener('dblclick', () =>
+  document.fullscreenElement ? document.exitFullscreen() : $('player').requestFullscreen());
+for (const ev of ['timeupdate', 'seeked', 'loadedmetadata']) video.addEventListener(ev, render);
+// fetch() is blocked on file:// — serve the folder (python3 -m http.server)
+fetch(NAME + '.json').then(r => r.text())
+  .then(text => { data = parse(text); load(); })
+  .catch(e => { $('err').textContent = `Không tải được ${NAME}.json (${e.message}) — hãy chạy: python3 -m http.server`; });
+</script>
+</body>
+</html>
