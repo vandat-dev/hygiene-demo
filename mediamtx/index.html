@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camera Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">Camera Simulator</span></div>
+  <nav class="tabs">
+    <a href="#/publish" id="tabPublish">Publish</a>
+    <a href="#/view" id="tabView">Watch</a>
+  </nav>
+</header>
+
+<!-- ============ Publish ============ -->
+<main class="layout" id="publishPage">
+  <aside class="panel">
+    <div class="panel-head">
+      <h1>Publish a video as a camera</h1>
+      <p>The video loops like a real camera feed. It keeps streaming while you switch to the Watch tab.</p>
+    </div>
+
+    <div class="panel-body steps">
+      <div class="step" id="step1">
+        <div class="step-no">1</div>
+        <div>
+          <span class="step-title">Choose a video</span>
+          <label class="drop" id="drop">
+            <input id="file" type="file" accept="video/*" class="visually-hidden">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg>
+            <div>
+              <strong id="dropTitle">Choose a video file</strong>
+              <span id="dropSub">or drop it here · MP4, WebM</span>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="step" id="step2">
+        <div class="step-no">2</div>
+        <div>
+          <label class="step-title" for="pPath">Name the stream</label>
+          <input id="pPath" type="text" value="camera-upload" placeholder="e.g. camera-01" spellcheck="false" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="step" id="step3">
+        <div class="step-no">3</div>
+        <div>
+          <span class="step-title">Publish</span>
+          <div class="actions">
+            <button id="go" class="primary" disabled>Start publishing</button>
+            <button id="stop" disabled>Stop</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-foot">
+      <div class="status" id="pStatus" aria-live="polite">Choose a video to start</div>
+      <dl class="kv" id="pUrls" hidden>
+        <dt class="label">RTSP for backend, VLC</dt>
+        <dd><code id="pRtsp"></code><button class="small" data-copy="pRtsp">Copy</button></dd>
+      </dl>
+    </div>
+  </aside>
+
+  <section class="viewer">
+    <div class="stage">
+      <video id="pVideo" muted loop playsinline></video>
+      <div class="hud"><span id="pHudPath">camera-upload</span><span class="live" id="pHudLive" hidden>LIVE</span></div>
+      <div class="empty" id="pEmpty">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg>
+        <strong>No video yet</strong>
+        <p>Choose a file on the left. It plays here as a preview before you publish.</p>
+      </div>
+    </div>
+    <dl class="stats" id="pStats">
+      <div><dt>Resolution</dt><dd data-k="res">—</dd></div>
+      <div><dt>FPS</dt><dd data-k="fps">—</dd></div>
+      <div><dt>Bitrate out</dt><dd data-k="rate">—</dd></div>
+      <div><dt>Codec</dt><dd data-k="codec">—</dd></div>
+    </dl>
+  </section>
+</main>
+
+<!-- ============ Watch ============ -->
+<main class="layout" id="viewPage" hidden>
+  <aside class="panel">
+    <div class="panel-head">
+      <h1>Watch a stream</h1>
+      <p>Plays over WebRTC. If nobody is publishing yet, the page waits and starts as soon as the stream appears.</p>
+    </div>
+
+    <div class="panel-body">
+      <form id="viewForm">
+        <label class="label" for="wPath">Stream name</label>
+        <div class="row">
+          <input id="wPath" type="text" required spellcheck="false" autocomplete="off">
+          <button class="primary">Watch</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="panel-body" id="recentBox" hidden>
+      <span class="label">Recently watched</span>
+      <ul class="chips" id="recent"></ul>
+    </div>
+
+    <div class="panel-foot">
+      <div class="status" id="wStatus" aria-live="polite">Connecting…</div>
+      <dl class="kv">
+        <dt class="label">RTSP for backend, VLC</dt>
+        <dd><code id="wRtsp"></code><button class="small" data-copy="wRtsp">Copy</button></dd>
+      </dl>
+    </div>
+  </aside>
+
+  <section class="viewer">
+    <div class="stage">
+      <video id="wVideo" autoplay muted playsinline></video>
+      <div class="hud"><span id="wHudPath"></span><span class="live" id="wHudLive" hidden>LIVE</span></div>
+      <div class="empty" id="wEmpty">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg>
+        <strong id="wEmptyTitle">Connecting…</strong>
+        <p id="wEmptyText"></p>
+      </div>
+    </div>
+    <dl class="stats" id="wStats">
+      <div><dt>Resolution</dt><dd data-k="res">—</dd></div>
+      <div><dt>FPS</dt><dd data-k="fps">—</dd></div>
+      <div><dt>Bitrate in</dt><dd data-k="rate">—</dd></div>
+      <div><dt>Codec</dt><dd data-k="codec">—</dd></div>
+    </dl>
+  </section>
+</main>
+
+<script type="module">
+// One page, two tabs (#/publish, #/view/<path>) so publishing keeps running while viewing.
+const $ = id => document.getElementById(id);
+
+// Ask serve.py for this machine's LAN IP (mediamtx runs on the same machine), so every URL
+// shown (RTSP, view link, address bar) works for others on the same LAN.
+// Served by plain `python3 -m http.server` there is no /lan-ip -> use the address bar host.
+const LOCAL = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'];
+let lanIp = null;
+try {
+  const res = await fetch('lan-ip', { cache: 'no-store' });
+  if (res.ok) lanIp = (await res.text()).trim();
+} catch {}
+if (lanIp && LOCAL.includes(location.hostname)) {
+  location.replace(`${location.protocol}//${lanIp}:${location.port}${location.pathname}${location.hash}`);
+}
+const host = LOCAL.includes(location.hostname) ? (lanIp || 'localhost') : location.hostname;
+const rtspUrl = path => `rtsp://${host}:8554/${path}`;
+const viewHash = path => `#/view/${encodeURIComponent(path)}`;
+
+function setStatus(el, text, state = '') {
+  el.textContent = text;
+  el.dataset.state = state;
+}
+
+// Wait for full ICE gathering so the offer carries all candidates (no trickle ICE)
+const iceGathered = pc => new Promise(r => pc.iceGatheringState === 'complete' ? r()
+  : pc.addEventListener('icegatheringstatechange', () => pc.iceGatheringState === 'complete' && r()));
+
+async function exchangeSdp(pc, url, editAnswer = sdp => sdp) {
+  await pc.setLocalDescription(await pc.createOffer());
+  await iceGathered(pc);
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/sdp' }, body: pc.localDescription.sdp });
+  if (!res.ok) throw Object.assign(new Error(`mediamtx returned error ${res.status}`), { status: res.status });
+  await pc.setRemoteDescription({ type: 'answer', sdp: editAnswer(await res.text()) });
+}
+
+// Chrome starts WebRTC at a few hundred kbps and probes upward for ~10s (resolution climbs 540p -> 1080p).
+// On a LAN the link can take full bitrate at once: start at 6 Mbps (kbps values, Chrome-only fmtp params).
+// ponytail: assumes LAN; over a slow uplink this start rate would congest at first, lower it there
+const fastStart = sdp => sdp.replace(/^(a=fmtp:\d+ .*)$/gm, '$1;x-google-start-bitrate=6000;x-google-min-bitrate=2000');
+
+// Live numbers from WebRTC getStats(): resolution, fps, bitrate, codec. Updates every second.
+function watchStats(getPc, rtpType, box) {
+  const cells = Object.fromEntries([...box.querySelectorAll('[data-k]')].map(el => [el.dataset.k, el]));
+  const show = (k, text) => { cells[k].textContent = text; };
+  let last = null;
+  setInterval(async () => {
+    const pc = getPc();
+    if (!pc || pc.connectionState !== 'connected') {
+      last = null;
+      for (const k in cells) show(k, '—');
+      return;
+    }
+    const report = await pc.getStats();
+    let rtp;
+    report.forEach(s => { if (s.type === rtpType && s.kind === 'video') rtp = s; });
+    if (!rtp) return;
+    const bytes = rtpType === 'outbound-rtp' ? rtp.bytesSent : rtp.bytesReceived;
+    if (last) {
+      const mbps = (bytes - last.bytes) * 8 / (rtp.timestamp - last.ts) / 1000;
+      show('rate', mbps >= 1 ? `${mbps.toFixed(1)} Mbps` : `${Math.round(mbps * 1000)} kbps`);
+    }
+    last = { bytes, ts: rtp.timestamp };
+    // Sender only: why the encoder lowers resolution (cpu | bandwidth | other | none); fps is kept
+    const why = { cpu: 'CPU limited', bandwidth: 'probing bandwidth', other: 'limited' }[rtp.qualityLimitationReason];
+    if (rtp.frameWidth) show('res', `${rtp.frameWidth}×${rtp.frameHeight}${why ? ' · ' + why : ''}`);
+    show('fps', rtp.framesPerSecond != null ? String(Math.round(rtp.framesPerSecond)) : '—');
+    show('codec', report.get(rtp.codecId)?.mimeType?.split('/')[1] ?? '—');
+  }, 1000);
+}
+
+/* ---------------- Publisher: local file -> WHIP ---------------- */
+const publisher = (() => {
+  const v = $('pVideo');
+  let pc, file, livePath;
+
+  const pathName = () => $('pPath').value.trim();
+  const fmtSize = b => b > 1e9 ? (b / 1e9).toFixed(1) + ' GB' : (b / 1e6).toFixed(1) + ' MB';
+
+  function status(text, state) {
+    setStatus($('pStatus'), text, state);
+    $('pHudLive').hidden = state !== 'live';
+    $('tabPublish').classList.toggle('on-air', state === 'live');
+  }
+
+  function refresh() {
+    $('pHudPath').textContent = pathName() || '—';
+    $('go').disabled = !!pc || !file || !pathName();
+    $('step1').classList.toggle('done', !!file);
+    $('step2').classList.toggle('done', !!file && !!pathName());
+    $('step3').classList.toggle('done', !!livePath);
+  }
+
+  function pickFile(f) {
+    if (!f) return;
+    if (!f.type.startsWith('video/')) return status('This file is not a video', 'error');
+    if (pc) stop();
+    file = f;
+    v.src = URL.createObjectURL(f);
+    v.controls = true;
+    $('pEmpty').hidden = true;
+    $('drop').classList.add('has-file');
+    $('dropTitle').textContent = f.name;
+    $('dropTitle').title = f.name;
+    $('dropSub').textContent = `${fmtSize(f.size)} · click to change`;
+    status('Ready to publish');
+    refresh();
+  }
+
+  async function publish() {
+    const path = pathName();
+    await v.play();
+    status('Connecting to mediamtx…', 'wait');
+
+    pc = new RTCPeerConnection();
+    const track = v.captureStream().getVideoTracks()[0];
+    track.contentHint = 'motion'; // a camera feed: keep fps, lower resolution only if the machine can't keep up
+    // Chrome caps WebRTC video at ~2.5 Mbps by default, too low for 1080p25
+    const tr = pc.addTransceiver(track, { direction: 'sendonly', sendEncodings: [{ maxBitrate: 8_000_000 }] });
+    // Force H264 so RTSP readers (reader.py, VLC) get H264 instead of VP8
+    tr.setCodecPreferences(RTCRtpSender.getCapabilities('video').codecs.filter(c => c.mimeType === 'video/H264'));
+
+    const me = pc;
+    pc.onconnectionstatechange = () => {
+      if (me !== pc) return;
+      if (pc.connectionState === 'connected') {
+        livePath = path;
+        status('Live', 'live');
+        $('pRtsp').textContent = rtspUrl(path);
+        $('pUrls').hidden = false;
+        refresh();
+      }
+      if (pc.connectionState === 'failed') { stop(); status('Lost connection to mediamtx. Press Start publishing to try again.', 'error'); }
+    };
+
+    $('stop').disabled = false; $('pPath').disabled = true;
+    refresh();
+    await exchangeSdp(pc, `http://${host}:8889/${encodeURIComponent(path)}/whip`, fastStart);
+    const params = tr.sender.getParameters();
+    params.degradationPreference = 'maintain-framerate';
+    await tr.sender.setParameters(params).catch(() => {}); // older browsers: contentHint above still applies
+  }
+
+  function stop() {
+    pc?.close(); pc = null; livePath = null;
+    v.pause();
+    $('stop').disabled = true; $('pPath').disabled = false;
+    $('pUrls').hidden = true;
+    status('Stopped');
+    refresh();
+  }
+
+  $('file').onchange = () => pickFile($('file').files[0]);
+  const drop = $('drop');
+  drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+  drop.ondragleave = () => drop.classList.remove('over');
+  drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); pickFile(e.dataTransfer.files[0]); };
+
+  v.onerror = () => { if (file) status("The browser can't play this file. Try an MP4 (H264) or WebM file.", 'error'); };
+  $('pPath').oninput = refresh;
+
+  $('go').onclick = () => publish().catch(e => {
+    console.error(e);
+    stop();
+    status(e.message === 'Failed to fetch' ? `Can't reach mediamtx at ${host}:8889. Check that docker compose is running.` : e.message, 'error');
+  });
+  $('stop').onclick = stop;
+
+  // Closing or reloading the tab stops the stream: ask first
+  window.addEventListener('beforeunload', e => { if (pc) e.preventDefault(); });
+
+  watchStats(() => pc, 'outbound-rtp', $('pStats'));
+  refresh();
+  return { livePath: () => livePath };
+})();
+
+/* ---------------- Viewer: WHEP -> <video> ---------------- */
+const viewer = (() => {
+  const v = $('wVideo');
+  const RECENT_KEY = 'mediamtx-recent';
+  let pc, current, gen = 0, timer;
+
+  function status(text, state, detail = '') {
+    setStatus($('wStatus'), text, state);
+    $('wEmptyTitle').textContent = text;
+    $('wEmptyText').textContent = detail;
+    $('wEmpty').hidden = state === 'live';
+    $('wHudLive').hidden = state !== 'live';
+    v.controls = state === 'live';
+  }
+
+  const loadRecent = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch { return []; } };
+  function saveRecent(path) {
+    const list = [path, ...loadRecent().filter(p => p !== path)].slice(0, 8);
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch {}
+    renderRecent();
+  }
+  function renderRecent() {
+    const list = loadRecent();
+    $('recent').replaceChildren(...list.map(p => {
+      const li = document.createElement('li'), a = document.createElement('a');
+      a.href = viewHash(p);
+      a.textContent = p;
+      if (p === current) a.setAttribute('aria-current', 'true');
+      li.append(a);
+      return li;
+    }));
+    $('recentBox').hidden = !list.length;
+  }
+
+  // gen invalidates retries/connections of a previous path
+  async function connect(g, path) {
+    const mine = new RTCPeerConnection();
+    pc = mine;
+    mine.addTransceiver('video', { direction: 'recvonly' });
+    mine.ontrack = e => v.srcObject = e.streams[0];
+    mine.onconnectionstatechange = () => {
+      if (g !== gen) return;
+      if (mine.connectionState === 'connected') { status('Live', 'live'); saveRecent(path); }
+      if (['failed', 'disconnected'].includes(mine.connectionState)) {
+        mine.close();
+        status('Connection lost', 'wait', 'The stream stopped or the network dropped. Reconnecting…');
+        timer = setTimeout(() => retry(g, path), 2000);
+      }
+    };
+    try {
+      await exchangeSdp(mine, `http://${host}:8889/${encodeURIComponent(path)}/whep`);
+    } catch (e) {
+      mine.close();
+      if (g !== gen) return;
+      if (e.status === 404) status('Waiting for signal', 'wait', `Nobody is publishing to "${path}" yet. Start it from the Publish tab and the video will appear here.`);
+      else if (e.status) status(`mediamtx error ${e.status}`, 'error', 'Retrying…');
+      else status('mediamtx unreachable', 'error', `Can't reach ${host}:8889. Check that docker compose is running. Retrying…`);
+      timer = setTimeout(() => retry(g, path), 2000);
+    }
+  }
+  const retry = (g, path) => { if (g === gen) connect(g, path); };
+
+  function close() {
+    gen++;
+    clearTimeout(timer);
+    pc?.close(); pc = null;
+    v.srcObject = null;
+    current = null;
+  }
+
+  function open(path) {
+    if (path === current) return;
+    close();
+    current = path;
+    $('wPath').value = path;
+    $('wHudPath').textContent = path;
+    $('wRtsp').textContent = rtspUrl(path);
+    renderRecent();
+    status('Connecting…', 'wait');
+    connect(gen, path);
+  }
+
+  $('viewForm').onsubmit = e => {
+    e.preventDefault();
+    const path = $('wPath').value.trim();
+    if (path) location.hash = viewHash(path);
+  };
+
+  watchStats(() => pc, 'inbound-rtp', $('wStats'));
+  return { open, close, lastRecent: () => loadRecent()[0] };
+})();
+
+/* ---------------- Router ---------------- */
+function route() {
+  // #/publish | #/view | #/view/<path>
+  const [, tab, ...rest] = location.hash.split('/');
+  const isView = tab === 'view';
+  $('publishPage').hidden = isView;
+  $('viewPage').hidden = !isView;
+  $('tabPublish').setAttribute('aria-current', isView ? 'false' : 'page');
+  $('tabView').setAttribute('aria-current', isView ? 'page' : 'false');
+
+  if (isView) {
+    const path = decodeURIComponent(rest.join('/')) || publisher.livePath() || viewer.lastRecent() || 'camera-upload';
+    viewer.open(path);
+  } else {
+    viewer.close(); // do not keep a WebRTC session open in the background
+  }
+}
+window.addEventListener('hashchange', route);
+route();
+
+// navigator.clipboard only exists on https/localhost; on http://<LAN IP> fall back to execCommand('copy')
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch {}
+  const ta = Object.assign(document.createElement('textarea'), { value: text, readOnly: true });
+  ta.style.cssText = 'position:fixed;opacity:0';
+  document.body.append(ta);
+  ta.select();
+  const ok = document.execCommand('copy');
+  ta.remove();
+  return ok;
+}
+document.querySelectorAll('[data-copy]').forEach(btn => btn.onclick = async () => {
+  btn.textContent = await copyText($(btn.dataset.copy).textContent) ? 'Copied' : "Couldn't copy";
+  setTimeout(() => btn.textContent = 'Copy', 1500);
+});
+</script>
+</body>
+</html>

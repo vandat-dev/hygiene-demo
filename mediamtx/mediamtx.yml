@@ -1,0 +1,13 @@
+# Only non-default settings. Ports: see README.md
+
+# RTSP over TCP only (no UDP 8000/8001, no multicast)
+rtspTransports: [tcp]
+
+# Protocols not used by this demo (SRT kept on :8890 for testing)
+rtmp: no
+hls: no
+moq: no
+
+paths:
+  # Accept any path: publish.html (WHIP), edge (SRT/RTSP)
+  all_others:

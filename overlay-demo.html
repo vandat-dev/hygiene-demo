@@ -76,7 +76,7 @@ const $ = id => document.getElementById(id);
 const video = $('video');
 // ?name=attempt_1_violation → loads attempt_1_violation.mp4 + .json (default: attempt_1_violation)
 const NAME = new URLSearchParams(location.search).get('name') || 'attempt_1_violation';
-video.src = NAME + '.mp4';
+video.src = 'samples/' + NAME + '.mp4';
 let data;
 
 // Accepts plain JSON, a JSON string containing JSON, or text with escaped quotes (\")
@@ -183,7 +183,7 @@ $('player').addEventListener('dblclick', () =>
   document.fullscreenElement ? document.exitFullscreen() : $('player').requestFullscreen());
 for (const ev of ['timeupdate', 'seeked', 'loadedmetadata']) video.addEventListener(ev, render);
 // fetch() is blocked on file:// — serve the folder (python3 -m http.server)
-fetch(NAME + '.json').then(r => r.text())
+fetch('samples/' + NAME + '.json').then(r => r.text())
   .then(text => { data = parse(text); load(); })
   .catch(e => { $('err').textContent = `Không tải được ${NAME}.json (${e.message}) — hãy chạy: python3 -m http.server`; });
 </script>

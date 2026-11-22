@@ -1,0 +1,15 @@
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:1.21.4
+    network_mode: host
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+    restart: unless-stopped
+
+  web:
+    image: python:3.12-alpine
+    network_mode: host
+    volumes:
+      - ./:/app:ro
+    command: python -u /app/serve.py 8080
+    restart: unless-stopped
