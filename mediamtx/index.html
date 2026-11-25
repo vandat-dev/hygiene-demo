@@ -50,8 +50,28 @@
         </div>
       </div>
 
-      <div class="step" id="step3">
+      <div class="step done" id="stepQ">
         <div class="step-no">3</div>
+        <div>
+          <span class="step-title">Quality (can change while live)</span>
+          <div class="quality">
+            <select id="qRes" aria-label="Resolution">
+              <option value="0">Source res</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option>
+            </select>
+            <select id="qFps" aria-label="FPS">
+              <option value="30">30 fps</option><option value="25" selected>25 fps</option><option value="20">20 fps</option><option value="15">15 fps</option>
+            </select>
+            <select id="qPref" aria-label="When short on bandwidth or CPU">
+              <option value="maintain-resolution">Keep resolution</option>
+              <option value="maintain-framerate">Keep fps</option>
+              <option value="balanced">Balanced</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="step" id="step3">
+        <div class="step-no">4</div>
         <div>
           <span class="step-title">Publish</span>
           <div class="actions">
@@ -205,7 +225,7 @@ function watchStats(getPc, rtpType, box) {
       show('rate', mbps >= 1 ? `${mbps.toFixed(1)} Mbps` : `${Math.round(mbps * 1000)} kbps`);
     }
     last = { bytes, ts: rtp.timestamp };
-    // Sender only: why the encoder lowers resolution (cpu | bandwidth | other | none); fps is kept
+    // Sender only: why the encoder lowers resolution/fps (cpu | bandwidth | other | none)
     const why = { cpu: 'CPU limited', bandwidth: 'probing bandwidth', other: 'limited' }[rtp.qualityLimitationReason];
     if (rtp.frameWidth) show('res', `${rtp.frameWidth}×${rtp.frameHeight}${why ? ' · ' + why : ''}`);
     show('fps', rtp.framesPerSecond != null ? String(Math.round(rtp.framesPerSecond)) : '—');
@@ -216,7 +236,11 @@ function watchStats(getPc, rtpType, box) {
 /* ---------------- Publisher: local file -> WHIP ---------------- */
 const publisher = (() => {
   const v = $('pVideo');
-  let pc, file, livePath;
+  let pc, sender, file, livePath;
+  const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
+  // Timer in a Worker: page timers are throttled to 1/s when the browser tab is in the background
+  const ticker = new Worker(URL.createObjectURL(new Blob(['let t; onmessage = e => { clearInterval(t); if (e.data) t = setInterval(() => postMessage(0), e.data); }'])));
+  ticker.onmessage = () => ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
 
   const pathName = () => $('pPath').value.trim();
   const fmtSize = b => b > 1e9 ? (b / 1e9).toFixed(1) + ' GB' : (b / 1e6).toFixed(1) + ' MB';
@@ -257,10 +281,14 @@ const publisher = (() => {
     status('Connecting to mediamtx…', 'wait');
 
     pc = new RTCPeerConnection();
-    const track = v.captureStream().getVideoTracks()[0];
-    track.contentHint = 'motion'; // a camera feed: keep fps, lower resolution only if the machine can't keep up
+    // Video -> canvas on a fixed clock: video.captureStream() emits frames whenever the page paints (jittery 20-30 fps);
+    // a camera delivers a constant rate, so redraw at exactly the chosen fps (repeats frames if the source is slower).
+    canvas.width = v.videoWidth; canvas.height = v.videoHeight;
+    const track = canvas.captureStream().getVideoTracks()[0];
+    ticker.postMessage(1000 / +$('qFps').value);
     // Chrome caps WebRTC video at ~2.5 Mbps by default, too low for 1080p25
     const tr = pc.addTransceiver(track, { direction: 'sendonly', sendEncodings: [{ maxBitrate: 8_000_000 }] });
+    sender = tr.sender;
     // Force H264 so RTSP readers (reader.py, VLC) get H264 instead of VP8
     tr.setCodecPreferences(RTCRtpSender.getCapabilities('video').codecs.filter(c => c.mimeType === 'video/H264'));
 
@@ -280,13 +308,27 @@ const publisher = (() => {
     $('stop').disabled = false; $('pPath').disabled = true;
     refresh();
     await exchangeSdp(pc, `http://${host}:8889/${encodeURIComponent(path)}/whip`, fastStart);
-    const params = tr.sender.getParameters();
-    params.degradationPreference = 'maintain-framerate';
-    await tr.sender.setParameters(params).catch(() => {}); // older browsers: contentHint above still applies
+    await applyQuality();
   }
 
+  // Chrome's encoder adapts to bandwidth/CPU by dropping resolution or fps; mediamtx relays it as-is to RTSP.
+  // Pin the target (res/fps caps) and say which one to sacrifice first. Applies live, no renegotiation.
+  async function applyQuality() {
+    if (!sender) return;
+    const h = +$('qRes').value, fps = +$('qFps').value, pref = $('qPref').value;
+    sender.track.contentHint = pref === 'maintain-framerate' ? 'motion' : 'detail';
+    const p = sender.getParameters();
+    p.degradationPreference = pref;
+    p.encodings[0].scaleResolutionDownBy = h && v.videoHeight > h ? v.videoHeight / h : 1;
+    p.encodings[0].maxFramerate = fps;
+    ticker.postMessage(1000 / fps);
+    await sender.setParameters(p).catch(e => console.warn('setParameters', e)); // older browsers: contentHint still applies
+  }
+  for (const id of ['qRes', 'qFps', 'qPref']) $(id).onchange = applyQuality;
+
   function stop() {
-    pc?.close(); pc = null; livePath = null;
+    pc?.close(); pc = null; sender = null; livePath = null;
+    ticker.postMessage(0);
     v.pause();
     $('stop').disabled = true; $('pPath').disabled = false;
     $('pUrls').hidden = true;

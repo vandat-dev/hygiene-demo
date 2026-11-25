@@ -23,6 +23,11 @@ def lan_ip():
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
+    def end_headers(self):
+        # Revalidate every file, otherwise browsers keep an old style.css/index.html after edits
+        self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
     def do_GET(self):
         if self.path.split("?")[0] != "/lan-ip":
             return super().do_GET()

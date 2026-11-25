@@ -213,6 +213,9 @@ input[type="text"]:disabled { color: var(--muted); }
 
 .row { display: flex; gap: 8px; }
 .row > input { flex: 1; min-width: 0; }
+.quality { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.quality > select:last-child { grid-column: 1 / -1; }
+select { width: 100%; min-width: 0; height: 36px; padding: 0 6px; font: var(--fs-sm) var(--mono); color: var(--ink); background: var(--sunken); border: 1px solid var(--line); border-radius: 4px; }
 .actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 
 button {
